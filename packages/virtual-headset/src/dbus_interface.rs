@@ -1,3 +1,4 @@
+use crossbeam_channel::Sender;
 use std::sync::{Arc, Mutex};
 use zbus::{SignalContext, blocking::Connection, interface};
 
@@ -26,6 +27,7 @@ impl MuteState {
 /// D-Bus interface for virtual headset mute control
 pub struct VirtualHeadset {
     state: MuteState,
+    toggle_tx: Sender<()>,
 }
 
 #[interface(name = "com.github.virtual_headset.Mute")]
@@ -35,14 +37,22 @@ impl VirtualHeadset {
         self.state.get()
     }
 
+    /// Toggle mute state
+    fn toggle(&self) -> zbus::fdo::Result<()> {
+        self.toggle_tx.send(()).map_err(|e| {
+            zbus::fdo::Error::Failed(format!("Failed to send toggle command: {}", e))
+        })?;
+        Ok(())
+    }
+
     /// Signal emitted when mute state changes
     #[zbus(signal)]
     async fn mute_changed(signal_ctxt: &SignalContext<'_>, muted: bool) -> zbus::Result<()>;
 }
 
 impl VirtualHeadset {
-    pub fn new(state: MuteState) -> Self {
-        Self { state }
+    pub fn new(state: MuteState, toggle_tx: Sender<()>) -> Self {
+        Self { state, toggle_tx }
     }
 }
 
@@ -54,11 +64,11 @@ pub struct DBusService {
 
 impl DBusService {
     /// Initialize D-Bus service on session bus
-    pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(toggle_tx: Sender<()>) -> Result<Self, Box<dyn std::error::Error>> {
         let state = MuteState::new();
         let connection = Connection::session()?;
 
-        let interface = VirtualHeadset::new(state.clone());
+        let interface = VirtualHeadset::new(state.clone(), toggle_tx);
         connection
             .object_server()
             .at("/com/github/virtual_headset", interface)?;

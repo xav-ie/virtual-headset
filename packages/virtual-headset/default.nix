@@ -27,16 +27,34 @@ let
 
   # Build dependencies separately for better caching
   cargoArtifacts = craneLib.buildDepsOnly commonArgs;
-in
-craneLib.buildPackage (
-  commonArgs
-  // {
-    inherit cargoArtifacts;
 
-    meta = with lib; {
-      description = "Virtual HID telephony headset for Zoom and Google Meet";
-      license = licenses.mit;
-      platforms = platforms.linux;
-    };
-  }
-)
+  unwrapped = craneLib.buildPackage (
+    commonArgs
+    // {
+      inherit cargoArtifacts;
+
+      meta = with lib; {
+        description = "Virtual HID telephony headset for Zoom and Google Meet";
+        license = licenses.mit;
+        platforms = platforms.linux;
+      };
+    }
+  );
+in
+pkgs.symlinkJoin {
+  name = "virtual-headset";
+  paths = [ unwrapped ];
+  buildInputs = [ pkgs.makeWrapper ];
+  postBuild = ''
+    wrapProgram $out/bin/virtual-headset \
+      --prefix PATH : ${
+        lib.makeBinPath [
+          pkgs.pulseaudio
+          pkgs.pipewire
+        ]
+      }
+  '';
+  meta = unwrapped.meta // {
+    mainProgram = "virtual-headset";
+  };
+}

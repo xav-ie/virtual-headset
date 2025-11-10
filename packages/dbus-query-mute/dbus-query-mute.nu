@@ -3,11 +3,10 @@
 # Exit code: 0 if muted, 1 if unmuted, 2 if service not available
 
 def main [] {
-  let result = dbus-send --session --print-reply
+  let result = (^dbus-send --session --print-reply
     --dest=com.github.virtual_headset
     /com/github/virtual_headset
-    com.github.virtual_headset.Mute.IsMuted
-    | complete
+    com.github.virtual_headset.Mute.IsMuted) | complete
 
   if $result.exit_code != 0 {
     print "unavailable"

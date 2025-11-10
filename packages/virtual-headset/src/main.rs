@@ -1,8 +1,9 @@
+use atty::Stream;
+use crossbeam_channel::unbounded;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
     terminal::{disable_raw_mode, enable_raw_mode},
 };
-use dialoguer::Select;
 use std::fs::File;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -12,7 +13,6 @@ mod hid_descriptor;
 use hid_descriptor::TELEPHONY_DESCRIPTOR;
 
 mod pipewire;
-use pipewire::AudioSource;
 
 mod dbus_interface;
 use dbus_interface::DBusService;
@@ -31,26 +31,6 @@ impl DeviceState {
     }
 }
 
-fn select_audio_source() -> Result<AudioSource, Box<dyn std::error::Error>> {
-    println!("Scanning for audio input sources...\n");
-
-    let sources = pipewire::list_sources()?;
-
-    if sources.is_empty() {
-        return Err("No audio sources found".into());
-    }
-
-    let descriptions: Vec<&str> = sources.iter().map(|s| s.description.as_str()).collect();
-
-    let selection = Select::new()
-        .with_prompt("Select audio input source")
-        .items(&descriptions)
-        .default(0)
-        .interact()?;
-
-    Ok(sources[selection].clone())
-}
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Set up Ctrl+C handler
     let running = Arc::new(AtomicBool::new(true));
@@ -63,13 +43,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("\nReceived Ctrl+C, shutting down...");
     })?;
 
-    // Select audio source
-    let selected_source = select_audio_source()?;
-    println!("\n✓ Selected: {}\n", selected_source.description);
+    // Get default audio source and set up PipeWire loopback
+    let is_interactive = atty::is(Stream::Stdin);
+
+    println!("Getting default audio input source...");
+    let default_source = pipewire::get_default_source()?;
+    println!("✓ Using source: {}\n", default_source.description);
 
     // Start pw-loopback to create virtual microphone
     println!("Starting PipeWire loopback...");
-    let mut loopback_process = pipewire::start_loopback(&selected_source.name)?;
+    let mut loopback_process = pipewire::start_loopback(&default_source.name)?;
     println!("✓ Virtual microphone created\n");
 
     // Small delay to let PipeWire settle
@@ -93,8 +76,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✓ HID device created successfully!");
     println!("  Check /dev/hidraw* for the new device\n");
 
+    // Create channel for D-Bus toggle commands
+    let (toggle_tx, toggle_rx) = unbounded();
+
     // Initialize D-Bus service for status bar integration
-    let dbus = match DBusService::new() {
+    let dbus = match DBusService::new(toggle_tx) {
         Ok(dbus) => {
             println!("✓ D-Bus service registered: com.github.virtual_headset");
             Some(dbus)
@@ -110,55 +96,104 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Send initial state: off-hook (bit 0 = 1), unmuted (bit 1 = 0)
     device.write(&[0x01, 0x01])?;
 
-    println!("Controls:");
-    println!("  m      - Toggle mute");
-    println!("  q/Esc  - Quit");
-    println!("\nReady. Press 'm' to toggle mute.");
+    if is_interactive {
+        println!("Controls:");
+        println!("  m      - Toggle mute");
+        println!("  q/Esc  - Quit");
+        println!("\nReady. Press 'm' to toggle mute.");
 
-    // Enable raw mode for keyboard input (after printing initial messages)
-    enable_raw_mode()?;
+        // Enable raw mode for keyboard input (after printing initial messages)
+        enable_raw_mode()?;
+    } else {
+        println!("Running in daemon mode. Use D-Bus to control mute state.");
+    }
 
     // Main event loop
     while running.load(Ordering::SeqCst) {
-        // Check for keyboard input (non-blocking with timeout)
-        if event::poll(std::time::Duration::from_millis(100))?
-            && let Event::Key(KeyEvent {
-                code, modifiers, ..
-            }) = event::read()?
-        {
-            match code {
-                KeyCode::Char('c') | KeyCode::Char('C')
-                    if modifiers.contains(KeyModifiers::CONTROL) =>
-                {
-                    running.store(false, Ordering::SeqCst);
-                }
-                KeyCode::Char('m') | KeyCode::Char('M') => {
-                    state.toggle_mute();
+        // Check for D-Bus toggle commands (non-blocking) - do this FIRST before anything else
+        while let Ok(()) = toggle_rx.try_recv() {
+            state.toggle_mute();
 
-                    // Send HID mute button pulse (0→1→0 toggles mute state)
-                    // Hook bit stays 1 (off-hook) throughout
-                    device.write(&[0x01, 0x03])?; // hook=1, mute=1
-                    std::thread::sleep(std::time::Duration::from_millis(50));
-                    device.write(&[0x01, 0x01])?; // hook=1, mute=0
-
-                    // Update D-Bus and send signal
-                    if let Some(ref dbus) = dbus {
-                        dbus.state().set(state.muted);
-                        if let Err(e) = dbus.notify_mute_changed(state.muted) {
-                            print!("D-Bus signal error: {}\r\n", e);
-                        }
-                    }
-
-                    print!("Mute: {}\r\n", if state.muted { "ON" } else { "OFF" });
-                }
-                KeyCode::Char('q') | KeyCode::Char('Q') => {
-                    running.store(false, Ordering::SeqCst);
-                }
-                KeyCode::Esc => {
-                    running.store(false, Ordering::SeqCst);
-                }
-                _ => {}
+            if is_interactive {
+                print!("D-Bus toggle received, ");
+            } else {
+                println!("D-Bus toggle received, muting: {}", state.muted);
             }
+
+            // Send HID mute button pulse (0→1→0 toggles mute state)
+            // Hook bit stays 1 (off-hook) throughout
+            device.write(&[0x01, 0x03])?; // hook=1, mute=1
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            device.write(&[0x01, 0x01])?; // hook=1, mute=0
+
+            // Update D-Bus and send signal
+            if let Some(ref dbus) = dbus {
+                dbus.state().set(state.muted);
+                if let Err(e) = dbus.notify_mute_changed(state.muted) {
+                    if is_interactive {
+                        print!("D-Bus signal error: {}\r\n", e);
+                    } else {
+                        println!("D-Bus signal error: {}", e);
+                    }
+                }
+            }
+
+            if is_interactive {
+                print!("Mute: {}\r\n", if state.muted { "ON" } else { "OFF" });
+            } else {
+                println!(
+                    "Mute state updated to: {}",
+                    if state.muted { "ON" } else { "OFF" }
+                );
+            }
+        }
+
+        // Check for keyboard input (non-blocking with timeout) - only in interactive mode
+        if is_interactive {
+            if event::poll(std::time::Duration::from_millis(100))?
+                && let Event::Key(KeyEvent {
+                    code, modifiers, ..
+                }) = event::read()?
+            {
+                match code {
+                    KeyCode::Char('c') | KeyCode::Char('C')
+                        if modifiers.contains(KeyModifiers::CONTROL) =>
+                    {
+                        running.store(false, Ordering::SeqCst);
+                    }
+                    KeyCode::Char('m') | KeyCode::Char('M') => {
+                        state.toggle_mute();
+
+                        print!("Keyboard toggle, ");
+
+                        // Send HID mute button pulse (0→1→0 toggles mute state)
+                        // Hook bit stays 1 (off-hook) throughout
+                        device.write(&[0x01, 0x03])?; // hook=1, mute=1
+                        std::thread::sleep(std::time::Duration::from_millis(50));
+                        device.write(&[0x01, 0x01])?; // hook=1, mute=0
+
+                        // Update D-Bus and send signal
+                        if let Some(ref dbus) = dbus {
+                            dbus.state().set(state.muted);
+                            if let Err(e) = dbus.notify_mute_changed(state.muted) {
+                                print!("D-Bus signal error: {}\r\n", e);
+                            }
+                        }
+
+                        print!("Mute: {}\r\n", if state.muted { "ON" } else { "OFF" });
+                    }
+                    KeyCode::Char('q') | KeyCode::Char('Q') => {
+                        running.store(false, Ordering::SeqCst);
+                    }
+                    KeyCode::Esc => {
+                        running.store(false, Ordering::SeqCst);
+                    }
+                    _ => {}
+                }
+            }
+        } else {
+            // In daemon mode, just sleep a bit to avoid busy-waiting
+            std::thread::sleep(std::time::Duration::from_millis(100));
         }
 
         // Try to read events from device (LED feedback from host)
@@ -221,8 +256,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Cleanup
-    disable_raw_mode()?;
-    print!("\r\nShutting down...\r\n");
+    if is_interactive {
+        disable_raw_mode()?;
+        print!("\r\nShutting down...\r\n");
+    } else {
+        println!("Shutting down...");
+    }
 
     // Kill pw-loopback process
     if let Err(e) = loopback_process.kill() {

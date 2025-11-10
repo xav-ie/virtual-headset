@@ -3,11 +3,15 @@ override_args := '--override-input devenv-root $"file+file://(pwd)/.devenv/root"
 default:
     @just run
 
-# flake check and build
+# flake check and build all packages
 check:
     #!/usr/bin/env nu
     nix flake check {{ override_args }}
-    just build
+    nix build {{ override_args }} '.#dbus-monitor-mute'
+    nix build {{ override_args }} '.#dbus-query-mute'
+    nix build {{ override_args }} '.#dbus-toggle-mute'
+    nix build {{ override_args }} '.#systemd-restart-virtual-headset'
+    nix build {{ override_args }} '.#virtual-headset'
 
 # show flake outputs
 show:
