@@ -116,9 +116,11 @@ Based on the [Noser HID article](https://www.noser.com/techblog/first-steps-with
 #### Understanding HID Descriptors
 
 From the Noser article:
+
 > "Descriptors use paired bytes where the first byte indicates the data type and the second contains the value."
 
 For example:
+
 - `0x05, 0x0B` = Usage Page (0x05) for Telephony (0x0B)
 - `0x09, 0x2F` = Usage (0x09) for Phone Mute (0x2F)
 - `0x81, 0x02` = Input report (Data, Variable, Absolute)
@@ -503,17 +505,20 @@ cd virtual-headset
 ```
 
 Add to `Cargo.toml`:
+
 ```toml
 [dependencies]
 uhid-virt = "0.0.8"
 ```
 
 Copy the Phase 1.4 code and run:
+
 ```bash
 cargo run
 ```
 
 Verify the device appears:
+
 ```bash
 ls -l /dev/hidraw*
 sudo evtest  # Select your device
@@ -575,6 +580,7 @@ sudo hid-recorder /dev/hidraw0
 ### Parse HID Descriptors
 
 Use [Frank Zhao's HID Descriptor Parser](https://eleccelerator.com/usbdescreqparser/):
+
 - Paste your descriptor bytes
 - Verify structure matches expectations
 
@@ -589,22 +595,27 @@ lsusb -v | grep -A 20 "Virtual Zoom"
 ## Resources
 
 ### HID Specification
+
 - [USB HID Usage Tables](https://usb.org/sites/default/files/hut1_4.pdf) - Official usage page definitions
 - [Telephony Usage Page](https://usb.org/sites/default/files/hut1_4.pdf#page=118) - Page 0x0B definitions
 
 ### Articles and Guides
+
 - [Noser: First Steps with USB HID Report](https://www.noser.com/techblog/first-steps-with-an-usb-hid-report/) - Excellent intro
 - [Jan Axelson's USB Complete](https://janaxelson.com/usb.htm) - Comprehensive reference
 
 ### Example Projects
+
 - [gearvr-controller-uhid](https://github.com/sameer/gearvr-controller-uhid) - UHID device example
 - [uhid-virt docs](https://docs.rs/uhid-virt) - Rust library documentation
 
 ### PipeWire
+
 - [PipeWire Documentation](https://docs.pipewire.org/)
 - [pipewire-rs](https://gitlab.freedesktop.org/pipewire/pipewire-rs) - Rust bindings
 
 ### Tools
+
 - [HID Descriptor Tool](https://www.usb.org/document-library/hid-descriptor-tool) - Windows tool for creating descriptors
 - [Frank Zhao's Descriptor Parser](https://eleccelerator.com/usbdescreqparser/) - Online parser
 - `evtest` - Linux tool for testing input devices

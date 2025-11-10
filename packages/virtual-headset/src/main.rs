@@ -1,18 +1,21 @@
-use uhid_virt::{Bus, CreateParams, UHIDDevice, StreamError, OutputEvent};
+use crossterm::{
+    event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
+    terminal::{disable_raw_mode, enable_raw_mode},
+};
+use dialoguer::Select;
 use std::fs::File;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use crossterm::{
-    terminal::{disable_raw_mode, enable_raw_mode},
-    event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
-};
-use dialoguer::Select;
+use uhid_virt::{Bus, CreateParams, OutputEvent, StreamError, UHIDDevice};
 
 mod hid_descriptor;
 use hid_descriptor::TELEPHONY_DESCRIPTOR;
 
 mod pipewire;
 use pipewire::AudioSource;
+
+mod dbus_interface;
+use dbus_interface::DBusService;
 
 struct DeviceState {
     muted: bool,
@@ -75,7 +78,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create HID device
     println!("Creating virtual HID telephony device...");
     let params = CreateParams {
-        name: "Virtual_Headset".to_string(),  // Must match audio device name for Zoom
+        name: "Virtual_Headset".to_string(), // Must match audio device name for Zoom
         phys: String::new(),
         uniq: String::new(),
         bus: Bus::USB,
@@ -89,6 +92,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut device = UHIDDevice::<File>::create(params)?;
     println!("✓ HID device created successfully!");
     println!("  Check /dev/hidraw* for the new device\n");
+
+    // Initialize D-Bus service for status bar integration
+    let dbus = match DBusService::new() {
+        Ok(dbus) => {
+            println!("✓ D-Bus service registered: com.github.virtual_headset");
+            Some(dbus)
+        }
+        Err(e) => {
+            println!("⚠ D-Bus service failed (will continue without it): {}", e);
+            None
+        }
+    };
 
     let mut state = DeviceState::new();
 
@@ -107,31 +122,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     while running.load(Ordering::SeqCst) {
         // Check for keyboard input (non-blocking with timeout)
         if event::poll(std::time::Duration::from_millis(100))?
-            && let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
-                match code {
-                    KeyCode::Char('c') | KeyCode::Char('C') if modifiers.contains(KeyModifiers::CONTROL) => {
-                        running.store(false, Ordering::SeqCst);
-                    }
-                    KeyCode::Char('m') | KeyCode::Char('M') => {
-                        state.toggle_mute();
-
-                        // Send HID mute button pulse (0→1→0 toggles mute state)
-                        // Hook bit stays 1 (off-hook) throughout
-                        device.write(&[0x01, 0x03])?; // hook=1, mute=1
-                        std::thread::sleep(std::time::Duration::from_millis(50));
-                        device.write(&[0x01, 0x01])?; // hook=1, mute=0
-
-                        print!("Mute: {}\r\n", if state.muted { "ON" } else { "OFF" });
-                    }
-                    KeyCode::Char('q') | KeyCode::Char('Q') => {
-                        running.store(false, Ordering::SeqCst);
-                    }
-                    KeyCode::Esc => {
-                        running.store(false, Ordering::SeqCst);
-                    }
-                    _ => {}
+            && let Event::Key(KeyEvent {
+                code, modifiers, ..
+            }) = event::read()?
+        {
+            match code {
+                KeyCode::Char('c') | KeyCode::Char('C')
+                    if modifiers.contains(KeyModifiers::CONTROL) =>
+                {
+                    running.store(false, Ordering::SeqCst);
                 }
+                KeyCode::Char('m') | KeyCode::Char('M') => {
+                    state.toggle_mute();
+
+                    // Send HID mute button pulse (0→1→0 toggles mute state)
+                    // Hook bit stays 1 (off-hook) throughout
+                    device.write(&[0x01, 0x03])?; // hook=1, mute=1
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                    device.write(&[0x01, 0x01])?; // hook=1, mute=0
+
+                    // Update D-Bus and send signal
+                    if let Some(ref dbus) = dbus {
+                        dbus.state().set(state.muted);
+                        if let Err(e) = dbus.notify_mute_changed(state.muted) {
+                            print!("D-Bus signal error: {}\r\n", e);
+                        }
+                    }
+
+                    print!("Mute: {}\r\n", if state.muted { "ON" } else { "OFF" });
+                }
+                KeyCode::Char('q') | KeyCode::Char('Q') => {
+                    running.store(false, Ordering::SeqCst);
+                }
+                KeyCode::Esc => {
+                    running.store(false, Ordering::SeqCst);
+                }
+                _ => {}
             }
+        }
 
         // Try to read events from device (LED feedback from host)
         // This helps us see if Zoom/Meet is communicating with the device
@@ -143,11 +171,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             let mute = (data[1] & 0x01) != 0;
                             let hook = (data[1] & 0x02) != 0;
                             let ring = (data[1] & 0x04) != 0;
-                            print!("Host LEDs → Mute:{}, Hook:{}, Ring:{}\r\n", mute, hook, ring);
+                            print!(
+                                "Host LEDs → Mute:{}, Hook:{}, Ring:{}\r\n",
+                                mute, hook, ring
+                            );
                         }
                     }
-                    OutputEvent::GetReport { id, report_number, report_type } => {
-                        print!("GetReport: id={}, num={}, type={:?}\r\n", id, report_number, report_type);
+                    OutputEvent::GetReport {
+                        id,
+                        report_number,
+                        report_type,
+                    } => {
+                        print!(
+                            "GetReport: id={}, num={}, type={:?}\r\n",
+                            id, report_number, report_type
+                        );
 
                         // Respond with current state: hook=1 (always off-hook), mute bit varies
                         let state_bits = 0x01 | ((state.muted as u8) << 1);
