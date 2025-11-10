@@ -13,29 +13,96 @@ Creates a virtual USB headset device that:
 
 This allows you to control mute in Zoom/Meet using your keyboard, just like pressing a physical headset's mute button.
 
+## Installation
+
+### NixOS / Home Manager (Recommended)
+
+This project provides NixOS and Home Manager modules for easy integration.
+
+#### NixOS Module
+
+Add to your `flake.nix`:
+
+```nix
+{
+  inputs.virtual-headset.url = "github:yourusername/virtual-headset";
+
+  outputs = { self, nixpkgs, virtual-headset, ... }: {
+    nixosConfigurations.yourhost = nixpkgs.lib.nixosSystem {
+      modules = [
+        virtual-headset.nixosModules.default
+        {
+          services.virtual-headset = {
+            enable = true;
+            user = "yourusername";
+          };
+        }
+      ];
+    };
+  };
+}
+```
+
+This automatically:
+- Sets up udev rules for `/dev/uhid` and `/dev/hidraw*`
+- Creates a systemd user service
+- Adds the package to your environment
+
+#### Home Manager Module (Waybar Integration)
+
+```nix
+{
+  imports = [ virtual-headset.homeManagerModules.default ];
+
+  programs.virtual-headset-waybar = {
+    enable = true;
+    mutedIcon = " ";      # Nerd Font icon for muted
+    unmutedIcon = " ";    # Nerd Font icon for unmuted
+  };
+}
+```
+
+This adds a Waybar module that:
+- Displays real-time mute status with configurable icons
+- Shows initial state on launch
+- Updates instantly when mute state changes
+- Integrates with your existing Waybar configuration
+
+### Building from source
+
+```bash
+# Using Nix flakes
+nix build
+
+# Or with Cargo
+cargo build --release --manifest-path packages/virtual-headset/Cargo.toml
+```
+
 ## Requirements
 
 - Linux with kernel HID support
 - PipeWire audio system
-- Rust toolchain (for building)
 - `pw-loopback` command (usually in `pipewire` package)
 - `pactl` command (usually in `pulseaudio-utils` or `pipewire-pulse` package)
 
-## Building
-
-```bash
-cargo build --release
-```
-
-The binary will be in `target/release/virtual-headset`.
-
 ## Usage
 
-### Basic usage
+### With systemd (NixOS)
+
+The service starts automatically when you log in. Control it with:
+
+```bash
+systemctl --user status virtual-headset
+systemctl --user restart virtual-headset
+```
+
+### Manual execution
 
 1. Run the program:
 
    ```bash
+   virtual-headset
+   # Or if built with cargo:
    ./target/release/virtual-headset
    ```
 
@@ -68,6 +135,11 @@ The virtual headset exposes its mute state via D-Bus for integration with status
 - Query current mute state
 - Returns `true` if muted, `false` if unmuted
 
+**`Toggle()`**
+
+- Toggle the mute state
+- Sends HID button event to connected apps
+
 ### Signals
 
 **`MuteChanged(bool muted)`**
@@ -75,52 +147,67 @@ The virtual headset exposes its mute state via D-Bus for integration with status
 - Emitted whenever mute state changes
 - `muted`: `true` when muted, `false` when unmuted
 
+### Utility Packages
+
+This project includes several Nushell-based utilities for D-Bus interaction:
+
+- **`dbus-monitor-mute`** - Monitor mute state changes with JSON output for Waybar
+- **`dbus-query-mute`** - Query current mute state (exit code: 0=muted, 1=unmuted)
+- **`dbus-toggle-mute`** - Toggle mute state via D-Bus
+- **`systemd-restart-virtual-headset`** - Restart the systemd service
+
 ### Examples
 
 **Query current mute state:**
 
 ```bash
+# Using the utility package
+dbus-query-mute
+
+# Or directly with dbus-send
 dbus-send --session --print-reply \
   --dest=com.github.virtual_headset \
   /com/github/virtual_headset \
   com.github.virtual_headset.Mute.IsMuted
-
-# Or use the helper script:
-./dbus-query-mute.sh
 ```
 
-**Listen for mute changes:**
+**Toggle mute:**
 
 ```bash
+# Using the utility package
+dbus-toggle-mute
+
+# Or directly with dbus-send
+dbus-send --session --print-reply \
+  --dest=com.github.virtual_headset \
+  /com/github/virtual_headset \
+  com.github.virtual_headset.Mute.Toggle
+```
+
+**Monitor for changes:**
+
+```bash
+# Using the utility package (outputs JSON for Waybar)
+dbus-monitor-mute
+
+# Or directly with dbus-monitor
 dbus-monitor --session \
   "type='signal',interface='com.github.virtual_headset.Mute',member='MuteChanged'"
-
-# Or use the helper script:
-./dbus-monitor-mute.sh
 ```
 
 ### Status Bar Integration
 
-**Waybar example:**
+For Waybar integration, see the [Home Manager Module](#home-manager-module-waybar-integration) section above.
 
-```json
-{
-  "custom/virtual-headset": {
-    "exec": "dbus-monitor --session \"type='signal',interface='com.github.virtual_headset.Mute'\" 2>/dev/null | grep -o 'boolean [a-z]*' | while read _ state; do [ \"$state\" = \"true\" ] && echo \"🔇\" || echo \"🔊\"; done",
-    "return-type": "json",
-    "format": "{}",
-    "on-click": "echo toggle mute here"
-  }
-}
-```
+For other status bars, you can use the utility packages:
 
 **i3status/i3blocks:**
 
 ```bash
 # Add to your i3blocks config:
 [virtual-headset]
-command=dbus-send --session --print-reply --dest=com.github.virtual_headset /com/github/virtual_headset com.github.virtual_headset.Mute.IsMuted 2>/dev/null | grep -q "true" && echo "🔇" || echo "🔊"
-interval=persist
+command=dbus-query-mute && echo "🔇" || echo "🔊"
+interval=1
 ```
 
 **Polybar:**
@@ -128,8 +215,9 @@ interval=persist
 ```ini
 [module/virtual-headset]
 type = custom/script
-exec = dbus-query-mute.sh && echo "🔇" || echo "🔊"
-tail = true
+exec = dbus-query-mute && echo "🔇" || echo "🔊"
+interval = 1
+click-left = dbus-toggle-mute
 ```
 
 ## How it works
@@ -209,25 +297,35 @@ The program requires access to:
 The included NixOS module sets up udev rules automatically:
 
 ```nix
-# In your configuration.nix
-services.uhid = {
+services.virtual-headset = {
   enable = true;
-  virtual-headset.enable = true;
+  user = "yourusername";
 };
 ```
 
 This adds:
 
 - `/dev/uhid` with mode `0660`, group `input`, TAG `uaccess`
-- `/dev/hidraw*` matching vendor `0x0b0e` product `0x245e` with mode `0666`
+- `/dev/hidraw*` matching vendor `0x0b0e` product `0x245e` with mode `0666`, TAG `uaccess`
+- User added to the `input` group
 
 ### Other distributions
 
-Add udev rules to `/etc/udev/rules.d/99-uhid.rules`:
+Add udev rules to `/etc/udev/rules.d/99-virtual-headset.rules`:
 
 ```
+# Allow access to /dev/uhid for creating virtual HID devices
 KERNEL=="uhid", MODE="0660", GROUP="input", TAG+="uaccess"
+
+# Allow browser WebHID access to virtual headset device
+# Matches Jabra vendor (0x0b0e) product (0x245e)
 KERNEL=="hidraw*", KERNELS=="0003:0B0E:245E.*", MODE="0666", TAG+="uaccess"
+```
+
+Add your user to the `input` group:
+
+```bash
+sudo usermod -aG input $USER
 ```
 
 Reload udev:
@@ -284,20 +382,75 @@ sudo udevadm trigger
 
 ```
 virtual-headset/
-├── src/
-│   ├── main.rs              # Main program logic
-│   ├── hid_descriptor.rs    # HID telephony descriptor
-│   └── pipewire.rs          # Audio routing via PipeWire
-├── Cargo.toml               # Rust dependencies
-├── devenv.nix              # Development environment
-└── README.md               # This file
+├── packages/
+│   ├── virtual-headset/           # Main Rust application
+│   │   ├── src/
+│   │   │   ├── main.rs            # Main program logic
+│   │   │   ├── hid_descriptor.rs  # HID telephony descriptor
+│   │   │   ├── dbus_interface.rs  # D-Bus service implementation
+│   │   │   └── pipewire.rs        # Audio routing via PipeWire
+│   │   ├── Cargo.toml
+│   │   └── default.nix            # Nix package definition
+│   ├── dbus-monitor-mute/         # Waybar-compatible mute monitor
+│   │   └── dbus-monitor-mute.nu
+│   ├── dbus-query-mute/           # Query mute state
+│   │   └── dbus-query-mute.nu
+│   ├── dbus-toggle-mute/          # Toggle mute via D-Bus
+│   │   └── dbus-toggle-mute.nu
+│   └── systemd-restart-virtual-headset/  # Service restart utility
+│       └── systemd-restart-virtual-headset.nu
+├── flake.nix                      # Nix flake with modules
+├── justfile                       # Build commands
+└── README.md                      # This file
 ```
+
+## Development
+
+### Building and testing
+
+```bash
+# Check flake and build all packages
+just check
+
+# Build the default package
+just build
+
+# Run the virtual headset
+just run
+
+# Show flake outputs
+just show
+```
+
+### Development shell
+
+```bash
+nix develop
+```
+
+This provides:
+- Rust toolchain (cargo, rustc, rust-analyzer, clippy, rustfmt)
+- Required system libraries
+- Code formatting tools (treefmt)
+
+### Code formatting
+
+```bash
+treefmt
+```
+
+Formats:
+- Rust code (rustfmt)
+- Nix code (nixfmt)
+- TOML files (taplo)
+- Markdown and other files (prettier)
 
 ## Credits
 
 - HID descriptor based on [NicoHood/HID](https://github.com/NicoHood/HID) Arduino library
 - Inspired by [gvalkov/python-evdev](https://github.com/gvalkov/python-evdev) for HID event handling
 - Uses [uhid-virt](https://crates.io/crates/uhid-virt) for virtual HID device creation
+- Built with [Nix](https://nixos.org/) and [flake-parts](https://flake.parts/)
 
 ## License
 
