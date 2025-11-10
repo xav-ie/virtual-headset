@@ -1,5 +1,5 @@
-use std::process::{Command, Child, Stdio};
 use std::io;
+use std::process::{Child, Command, Stdio};
 
 #[derive(Debug, Clone)]
 pub struct AudioSource {
@@ -9,14 +9,10 @@ pub struct AudioSource {
 
 /// List available audio input sources using pactl
 pub fn list_sources() -> Result<Vec<AudioSource>, io::Error> {
-    let output = Command::new("pactl")
-        .args(["list", "sources"])
-        .output()?;
+    let output = Command::new("pactl").args(["list", "sources"]).output()?;
 
     if !output.status.success() {
-        return Err(io::Error::other(
-            "Failed to list audio sources",
-        ));
+        return Err(io::Error::other("Failed to list audio sources"));
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -63,23 +59,4 @@ pub fn start_loopback(source_name: &str) -> Result<Child, io::Error> {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-}
-
-/// Mute or unmute a PipeWire source
-pub fn set_source_mute(source_name: &str, muted: bool) -> Result<(), io::Error> {
-    let status = Command::new("pactl")
-        .args([
-            "set-source-mute",
-            source_name,
-            if muted { "1" } else { "0" },
-        ])
-        .status()?;
-
-    if !status.success() {
-        return Err(io::Error::other(
-            "Failed to set source mute state",
-        ));
-    }
-
-    Ok(())
 }

@@ -16,31 +16,15 @@ use pipewire::AudioSource;
 
 struct DeviceState {
     muted: bool,
-    off_hook: bool,
 }
 
 impl DeviceState {
     fn new() -> Self {
-        Self {
-            muted: false,
-            off_hook: true,
-        }
+        Self { muted: false }
     }
 
-    fn toggle_mute(&mut self) -> bool {
+    fn toggle_mute(&mut self) {
         self.muted = !self.muted;
-        self.muted
-    }
-
-    fn toggle_hook(&mut self) -> bool {
-        self.off_hook = !self.off_hook;
-        self.off_hook
-    }
-
-    fn to_report(&self) -> [u8; 2] {
-        // Report format: [Report ID, bits: bit0=hook, bit1=mute, bit2-7=padding]
-        let bits = (self.off_hook as u8) | ((self.muted as u8) << 1);
-        [0x01, bits]
     }
 }
 
@@ -108,15 +92,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut state = DeviceState::new();
 
-    // Send initial state
-    device.write(&state.to_report())?;
+    // Send initial state: off-hook (bit 0 = 1), unmuted (bit 1 = 0)
+    device.write(&[0x01, 0x01])?;
 
     println!("Controls:");
-    println!("  m - Toggle mute");
-    println!("  h - Toggle hook (on-hook/off-hook)");
-    println!("  q - Quit");
-    println!("  Ctrl+C - Quit");
-    println!("\nStatus: OFF-HOOK, UNMUTED");
+    println!("  m      - Toggle mute");
+    println!("  q/Esc  - Quit");
+    println!("\nReady. Press 'm' to toggle mute.");
 
     // Enable raw mode for keyboard input (after printing initial messages)
     enable_raw_mode()?;
@@ -131,46 +113,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         running.store(false, Ordering::SeqCst);
                     }
                     KeyCode::Char('m') | KeyCode::Char('M') => {
-                        // Toggle internal state for display
                         state.toggle_mute();
 
-                        // Report ID 1: Telephony INPUT (Hook=Absolute, Mute=Relative)
-                        // For Relative OOC: send pulse (0→1→0 toggles)
-                        // Hook stays at current state (off-hook=1), Mute pulses to toggle
-
-                        // PRESS: mute bit = 1
-                        let press_bits = (state.off_hook as u8) | (1 << 1);
-                        device.write(&[0x01, press_bits])?;
-                        print!("Mute: PRESS (0x{:02x})\r\n", press_bits);
-
+                        // Send HID mute button pulse (0→1→0 toggles mute state)
+                        // Hook bit stays 1 (off-hook) throughout
+                        device.write(&[0x01, 0x03])?; // hook=1, mute=1
                         std::thread::sleep(std::time::Duration::from_millis(50));
+                        device.write(&[0x01, 0x01])?; // hook=1, mute=0
 
-                        // RELEASE: mute bit = 0 (no-op for Relative, but required before next toggle)
-                        let release_bits = state.off_hook as u8;
-                        device.write(&[0x01, release_bits])?;
-                        print!("Mute: RELEASE (0x{:02x})\r\n", release_bits);
-
-                        // Also send to Report ID 3 (System Microphone Mute) for Google Meet
-                        device.write(&[0x03, 0x01])?;
-                        std::thread::sleep(std::time::Duration::from_millis(50));
-                        device.write(&[0x03, 0x00])?;
-
-                        print!("Status: {}, {}\r\n",
-                            if state.off_hook { "OFF-HOOK" } else { "ON-HOOK" },
-                            if state.muted { "MUTED" } else { "UNMUTED" }
-                        );
-                    }
-                    KeyCode::Char('h') | KeyCode::Char('H') => {
-                        state.toggle_hook();
-                        // Hook is Absolute - send the new state directly
-                        // Mute bit stays 0 (we don't toggle mute here)
-                        let report_bits = state.off_hook as u8;
-                        device.write(&[0x01, report_bits])?;
-                        print!("Hook state changed\r\n");
-                        print!("Status: {}, {}\r\n",
-                            if state.off_hook { "OFF-HOOK" } else { "ON-HOOK" },
-                            if state.muted { "MUTED" } else { "UNMUTED" }
-                        );
+                        print!("Mute: {}\r\n", if state.muted { "ON" } else { "OFF" });
                     }
                     KeyCode::Char('q') | KeyCode::Char('Q') => {
                         running.store(false, Ordering::SeqCst);
@@ -189,58 +140,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 match event {
                     OutputEvent::Output { data } => {
                         if data.len() >= 2 && data[0] == 0x02 {
-                            // Report ID 2: LED states from Zoom
-                            let mute_led = (data[1] & 0x01) != 0;
-                            let offhook_led = (data[1] & 0x02) != 0;
-                            let ring_led = (data[1] & 0x04) != 0;
-                            print!("Zoom LEDs → Mute:{}, OffHook:{}, Ring:{}\r\n",
-                                   mute_led, offhook_led, ring_led);
-                        } else {
-                            print!("Received Output: {:?}\r\n", data);
+                            let mute = (data[1] & 0x01) != 0;
+                            let hook = (data[1] & 0x02) != 0;
+                            let ring = (data[1] & 0x04) != 0;
+                            print!("Host LEDs → Mute:{}, Hook:{}, Ring:{}\r\n", mute, hook, ring);
                         }
                     }
                     OutputEvent::GetReport { id, report_number, report_type } => {
-                        print!("Received GetReport: id={}, report_number={}, report_type={:?}\r\n", id, report_number, report_type);
+                        print!("GetReport: id={}, num={}, type={:?}\r\n", id, report_number, report_type);
 
-                        // Respond with current state
-                        let report = state.to_report();
-                        let response_data = vec![report[1]];
-                        if let Err(e) = device.write_get_report_reply(id, 0, response_data) {
-                            print!("Failed to send GetReport reply: {}\r\n", e);
-                        } else {
-                            print!("Sent GetReport reply: state=0x{:02x}\r\n", report[1]);
+                        // Respond with current state: hook=1 (always off-hook), mute bit varies
+                        let state_bits = 0x01 | ((state.muted as u8) << 1);
+                        if let Err(e) = device.write_get_report_reply(id, 0, vec![state_bits]) {
+                            print!("Failed to reply: {}\r\n", e);
                         }
                     }
-                    OutputEvent::SetReport { id, report_number, report_type, data } => {
-                        print!("Received SetReport: id={}, report_number={}, report_type={:?}, data={:?}\r\n", id, report_number, report_type, data);
-
+                    OutputEvent::SetReport { id, .. } => {
                         // Acknowledge SetReport
-                        if let Err(e) = device.write_set_report_reply(id, 0) {
-                            print!("Failed to send SetReport reply: {}\r\n", e);
-                        }
+                        let _ = device.write_set_report_reply(id, 0);
                     }
                     OutputEvent::Start { .. } => {
-                        print!("Received Start event - device opened by host\r\n");
-                    }
-                    OutputEvent::Stop => {
-                        print!("Received Stop event\r\n");
+                        print!("Device opened by host\r\n");
                     }
                     OutputEvent::Open => {
-                        print!("Received Open event\r\n");
+                        print!("Device connected\r\n");
                     }
-                    OutputEvent::Close => {
-                        print!("Received Close event\r\n");
+                    OutputEvent::Stop | OutputEvent::Close => {
+                        // Silently handle disconnect events
                     }
                 }
             }
             Err(StreamError::Io(e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                // No data available, that's fine
+                // No data available, normal
             }
             Err(StreamError::Io(e)) => {
-                print!("Read IO error: {}\r\n", e);
+                print!("IO error: {}\r\n", e);
             }
             Err(StreamError::UnknownEventType(t)) => {
-                print!("Unknown event type: {}\r\n", t);
+                print!("Unknown event: {}\r\n", t);
             }
         }
     }
