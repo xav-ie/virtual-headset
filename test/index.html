@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebHID Device Tester</title>
+    <style>
+        body {
+            font-family: monospace;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 10px 5px;
+            font-size: 16px;
+        }
+        #log {
+            background: #000;
+            color: #0f0;
+            padding: 15px;
+            height: 400px;
+            overflow-y: auto;
+            margin-top: 20px;
+            border-radius: 5px;
+        }
+        .error { color: #f00; }
+        .success { color: #0f0; }
+        .info { color: #0af; }
+    </style>
+</head>
+<body>
+    <h1>WebHID Virtual Headset Tester</h1>
+
+    <div>
+        <button id="requestBtn">Request Device</button>
+        <button id="getDevicesBtn">List Authorized Devices</button>
+        <button id="connectBtn" disabled>Connect to Device</button>
+        <button id="clearBtn">Clear Log</button>
+    </div>
+
+    <div id="log"></div>
+
+    <script>
+        const log = document.getElementById('log');
+        const connectBtn = document.getElementById('connectBtn');
+        let device = null;
+
+        function logMessage(msg, className = '') {
+            const line = document.createElement('div');
+            line.className = className;
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            log.appendChild(line);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        // Check WebHID support
+        if (!navigator.hid) {
+            logMessage('❌ WebHID not supported in this browser! Use Chrome/Edge.', 'error');
+        } else {
+            logMessage('✓ WebHID is supported', 'success');
+        }
+
+        // Request device
+        document.getElementById('requestBtn').addEventListener('click', async () => {
+            try {
+                logMessage('Requesting HID device...', 'info');
+
+                const filters = [
+                    { vendorId: 0x0b0e, productId: 0x245e }, // Jabra
+                    { vendorId: 0x1234 }, // Generic
+                    { usagePage: 0x0B }, // Telephony page
+                ];
+
+                const devices = await navigator.hid.requestDevice({ filters });
+
+                if (devices.length === 0) {
+                    logMessage('No device selected', 'error');
+                    return;
+                }
+
+                device = devices[0];
+                logMessage(`✓ Device selected: ${device.productName}`, 'success');
+                logMessage(`  Vendor: 0x${device.vendorId.toString(16)}`, 'info');
+                logMessage(`  Product: 0x${device.productId.toString(16)}`, 'info');
+                logMessage(`  Collections: ${device.collections.length}`, 'info');
+
+                device.collections.forEach((col, i) => {
+                    logMessage(`  Collection ${i}: usagePage=0x${col.usagePage.toString(16)}, usage=0x${col.usage.toString(16)}`, 'info');
+                });
+
+                connectBtn.disabled = false;
+            } catch (err) {
+                logMessage(`❌ Error: ${err.message}`, 'error');
+                console.error(err);
+            }
+        });
+
+        // List authorized devices
+        document.getElementById('getDevicesBtn').addEventListener('click', async () => {
+            try {
+                const devices = await navigator.hid.getDevices();
+                logMessage(`Found ${devices.length} authorized devices:`, 'info');
+
+                devices.forEach((d, i) => {
+                    logMessage(`  [${i}] ${d.productName} (0x${d.vendorId.toString(16)}:0x${d.productId.toString(16)})`, 'info');
+                });
+            } catch (err) {
+                logMessage(`❌ Error: ${err.message}`, 'error');
+            }
+        });
+
+        // Connect to device
+        document.getElementById('connectBtn').addEventListener('click', async () => {
+            if (!device) {
+                logMessage('No device selected!', 'error');
+                return;
+            }
+
+            try {
+                logMessage('Opening device...', 'info');
+                await device.open();
+                logMessage('✓ Device opened successfully!', 'success');
+
+                // Listen for input reports
+                device.addEventListener('inputreport', (event) => {
+                    const { data, reportId } = event;
+                    const bytes = new Uint8Array(data.buffer);
+                    const hex = Array.from(bytes).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' ');
+                    logMessage(`📥 Input Report ID ${reportId}: ${hex}`, 'success');
+                });
+
+                logMessage('Listening for input reports...', 'info');
+                logMessage('Press "m" in your virtual-headset program!', 'info');
+
+            } catch (err) {
+                logMessage(`❌ Failed to open device: ${err.message}`, 'error');
+                console.error(err);
+            }
+        });
+
+        // Clear log
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            log.innerHTML = '';
+            logMessage('Log cleared', 'info');
+        });
+
+        // Log initial authorized devices
+        (async () => {
+            try {
+                const devices = await navigator.hid.getDevices();
+                if (devices.length > 0) {
+                    logMessage(`Found ${devices.length} previously authorized devices`, 'info');
+                }
+            } catch (err) {
+                logMessage(`Error checking devices: ${err.message}`, 'error');
+            }
+        })();
+    </script>
+</body>
+</html>
