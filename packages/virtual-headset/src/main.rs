@@ -203,13 +203,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 match event {
                     OutputEvent::Output { data } => {
                         if data.len() >= 2 && data[0] == 0x02 {
-                            let mute = (data[1] & 0x01) != 0;
+                            let mute_led = (data[1] & 0x01) != 0;
                             let hook = (data[1] & 0x02) != 0;
                             let ring = (data[1] & 0x04) != 0;
-                            print!(
-                                "Host LEDs → Mute:{}, Hook:{}, Ring:{}\r\n",
-                                mute, hook, ring
-                            );
+
+                            // Sync internal state with what Zoom/host requested
+                            state.muted = mute_led;
+
+                            // Update D-Bus state and notify listeners
+                            if let Some(ref dbus) = dbus {
+                                dbus.state().set(state.muted);
+                                if let Err(e) = dbus.notify_mute_changed(state.muted) {
+                                    if is_interactive {
+                                        print!("D-Bus signal error: {}\r\n", e);
+                                    } else {
+                                        println!("D-Bus signal error: {}", e);
+                                    }
+                                }
+                            }
+
+                            if is_interactive {
+                                print!(
+                                    "Host LEDs → Mute:{}, Hook:{}, Ring:{} (state synced)\r\n",
+                                    mute_led, hook, ring
+                                );
+                            } else {
+                                println!(
+                                    "Host LEDs → Mute:{}, Hook:{}, Ring:{} (state synced)",
+                                    mute_led, hook, ring
+                                );
+                            }
                         }
                     }
                     OutputEvent::GetReport {
