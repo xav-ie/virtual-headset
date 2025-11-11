@@ -11,7 +11,8 @@ Creates a virtual USB headset device that:
 - **Sends mute button events** via USB HID telephony protocol
 - **Receives LED feedback** from apps (mute/hook/ring indicators)
 
-This allows you to control mute in Zoom/Meet using your keyboard, just like pressing a physical headset's mute button.
+This allows you to control mute in Zoom/Meet using your keyboard, just like
+pressing a physical headset's mute button.
 
 ## Installation
 
@@ -19,62 +20,14 @@ This allows you to control mute in Zoom/Meet using your keyboard, just like pres
 
 This project provides NixOS and Home Manager modules for easy integration.
 
-#### NixOS Module
-
-Add to your `flake.nix`:
-
-```nix
-{
-  inputs.virtual-headset.url = "github:yourusername/virtual-headset";
-
-  outputs = { self, nixpkgs, virtual-headset, ... }: {
-    nixosConfigurations.yourhost = nixpkgs.lib.nixosSystem {
-      modules = [
-        virtual-headset.nixosModules.default
-        {
-          services.virtual-headset = {
-            enable = true;
-            user = "yourusername";
-          };
-        }
-      ];
-    };
-  };
-}
-```
-
-This automatically:
-
-- Sets up udev rules for `/dev/uhid` and `/dev/hidraw*`
-- Creates a systemd user service
-- Adds the package to your environment
-
-#### Home Manager Module (Waybar Integration)
-
-```nix
-{
-  imports = [ virtual-headset.homeManagerModules.default ];
-
-  programs.virtual-headset-waybar = {
-    enable = true;
-    mutedIcon = " ";      # Nerd Font icon for muted
-    unmutedIcon = " ";    # Nerd Font icon for unmuted
-  };
-}
-```
-
-This adds a Waybar module that:
-
-- Displays real-time mute status with configurable icons
-- Shows initial state on launch
-- Updates instantly when mute state changes
-- Integrates with your existing Waybar configuration
+- **NixOS Module**: See [nixosModules/default.nix](./nixosModules/default.nix) for setup and configuration options
+- **Home Manager Module**: See [homeManagerModules/default.nix](./homeManagerModules/default.nix) for Waybar integration
 
 ### Building from source
 
 ```bash
 # Using Nix flakes
-nix build
+just build
 
 # Or with Cargo
 cargo build --release --manifest-path packages/virtual-headset/Cargo.toml
@@ -82,10 +35,15 @@ cargo build --release --manifest-path packages/virtual-headset/Cargo.toml
 
 ## Requirements
 
-- Linux with kernel HID support
+- Linux with kernel HID support (has been out since 2012)
 - PipeWire audio system
+
+If you are not using Nix integration, pleae also make sure you have:
+
 - `pw-loopback` command (usually in `pipewire` package)
 - `pactl` command (usually in `pulseaudio-utils` or `pipewire-pulse` package)
+
+The Nix package bundles these automatically.
 
 ## Usage
 
@@ -95,10 +53,14 @@ The service starts automatically when you log in. Control it with:
 
 ```bash
 systemctl --user status virtual-headset
+# On *non-interactive* start (such as in systemd service), it uses what you
+# have as "default" audio source in pipewire.
+# After changing default audio source, restart this service so that it can
+# use this as the new input.
 systemctl --user restart virtual-headset
 ```
 
-### Manual execution
+### Manual execution (interactive)
 
 1. Run the program:
 
@@ -122,7 +84,8 @@ systemctl --user restart virtual-headset
 
 ## D-Bus Integration
 
-The virtual headset exposes its mute state via D-Bus for integration with status bars and other tools.
+The virtual headset exposes its mute state via D-Bus for integration with
+status bars and other tools.
 
 ### D-Bus Interface
 
@@ -199,7 +162,7 @@ dbus-monitor --session \
 
 ### Status Bar Integration
 
-For Waybar integration, see the [Home Manager Module](#home-manager-module-waybar-integration) section above.
+For Waybar integration, see [homeManagerModules/default.nix](./homeManagerModules/default.nix).
 
 For other status bars, you can use the utility packages:
 
@@ -245,7 +208,7 @@ click-left = dbus-toggle-mute
 │ /dev/hidraw*        │
 │ "Virtual_Headset"   │
 └─────────────────────┘
-       │
+       ▲
        │ USB HID Telephony Protocol
        │ (Mute button + LED feedback)
        ▼
@@ -287,6 +250,17 @@ device = devices.find((d) => audioLabel.includes(d.productName));
 
 Since our audio device is `"Virtual_Headset_Microphone"` and HID device is `"Virtual_Headset"`, the match succeeds.
 
+> [!IMPORTANT]
+> This is the crux of why we need a forwarded audio source created. Another
+> approach could be to create an hid device of a chosen audio source, but this
+> probably has some edge cases. We can guarantee functionality by making it
+> ourselves.
+
+> [!NOTE]
+> Fun fact: Google meet does not have this same requirement as Zoom. So the
+> audio microphone is optional and you may use whatever microphone you like
+> with the virtual hid device
+
 ## Permissions
 
 The program requires access to:
@@ -296,20 +270,7 @@ The program requires access to:
 
 ### NixOS
 
-The included NixOS module sets up udev rules automatically:
-
-```nix
-services.virtual-headset = {
-  enable = true;
-  user = "yourusername";
-};
-```
-
-This adds:
-
-- `/dev/uhid` with mode `0660`, group `input`, TAG `uaccess`
-- `/dev/hidraw*` matching vendor `0x0b0e` product `0x245e` with mode `0666`, TAG `uaccess`
-- User added to the `input` group
+The included NixOS module sets up udev rules automatically. See [nixosModules/default.nix](./nixosModules/default.nix) for details.
 
 ### Other distributions
 
@@ -380,32 +341,6 @@ sudo udevadm trigger
 - Check udev rules are loaded: `udevadm info /dev/uhid`
 - Restart after adding udev rules
 
-## Project structure
-
-```
-virtual-headset/
-├── packages/
-│   ├── virtual-headset/           # Main Rust application
-│   │   ├── src/
-│   │   │   ├── main.rs            # Main program logic
-│   │   │   ├── hid_descriptor.rs  # HID telephony descriptor
-│   │   │   ├── dbus_interface.rs  # D-Bus service implementation
-│   │   │   └── pipewire.rs        # Audio routing via PipeWire
-│   │   ├── Cargo.toml
-│   │   └── default.nix            # Nix package definition
-│   ├── dbus-monitor-mute/         # Waybar-compatible mute monitor
-│   │   └── dbus-monitor-mute.nu
-│   ├── dbus-query-mute/           # Query mute state
-│   │   └── dbus-query-mute.nu
-│   ├── dbus-toggle-mute/          # Toggle mute via D-Bus
-│   │   └── dbus-toggle-mute.nu
-│   └── systemd-restart-virtual-headset/  # Service restart utility
-│       └── systemd-restart-virtual-headset.nu
-├── flake.nix                      # Nix flake with modules
-├── justfile                       # Build commands
-└── README.md                      # This file
-```
-
 ## Development
 
 ### Building and testing
@@ -427,6 +362,7 @@ just show
 ### Development shell
 
 ```bash
+# or, simply `direnv allow` for automatic activation
 nix develop
 ```
 
@@ -439,23 +375,20 @@ This provides:
 ### Code formatting
 
 ```bash
+# or `nix fmt`, if you do not have the devshell activated
 treefmt
 ```
 
-Formats:
-
-- Rust code (rustfmt)
-- Nix code (nixfmt)
-- TOML files (taplo)
-- Markdown and other files (prettier)
-
 ## Credits
 
-- HID descriptor based on [NicoHood/HID](https://github.com/NicoHood/HID) Arduino library
-- Inspired by [gvalkov/python-evdev](https://github.com/gvalkov/python-evdev) for HID event handling
-- Uses [uhid-virt](https://crates.io/crates/uhid-virt) for virtual HID device creation
-- Built with [Nix](https://nixos.org/) and [flake-parts](https://flake.parts/)
+- Amazing details and base knowledge gained here
+  - [Make your first steps with an USB HID Report](https://www.noser.com/techblog/first-steps-with-an-usb-hid-report/)
+- Important background information about HID report descriptors
+  - [Introduction to HID report descriptors](https://www.kernel.org/doc/html/latest/hid/hidintro.html)
+- [UHID - User-space I/O driver support for HID subsystem](https://www.kernel.org/doc/html/latest/hid/uhid.html)
+- Project uses
+  - [uhid-virt](https://crates.io/crates/uhid-virt) for virtual HID device creation
 
 ## License
 
-MIT License - See source files for details
+MIT License

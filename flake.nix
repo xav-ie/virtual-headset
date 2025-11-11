@@ -115,117 +115,37 @@
 
       flake = {
         nixosModules.default =
+          { pkgs, ... }:
           {
-            config,
-            lib,
-            pkgs,
-            ...
-          }:
-          let
-            cfg = config.services.virtual-headset;
-            packages = inputs.self.packages.${pkgs.system};
-          in
-          {
-            options.services.virtual-headset = {
-              enable = lib.mkEnableOption "virtual HID telephony headset for Zoom/Meet";
-
-              package = lib.mkOption {
-                type = lib.types.package;
-                default = packages.virtual-headset;
-                description = "The virtual-headset package to use";
-              };
-
-              user = lib.mkOption {
-                type = lib.types.str;
-                description = "User to grant /dev/uhid and /dev/hidraw permissions to";
-              };
-            };
-
-            config = lib.mkIf cfg.enable {
-              services.udev.extraRules = ''
-                # Allow access to /dev/uhid for creating virtual HID devices
-                KERNEL=="uhid", MODE="0660", GROUP="input", TAG+="uaccess"
-
-                # Allow browser WebHID access to virtual headset device
-                # Matches Jabra vendor (0x0b0e) product (0x245e)
-                KERNEL=="hidraw*", KERNELS=="0003:0B0E:245E.*", MODE="0666", TAG+="uaccess"
-              '';
-
-              users.users.${cfg.user}.extraGroups = [ "input" ];
-              environment.systemPackages = [ cfg.package ];
-
-              systemd.user.services.virtual-headset = {
-                description = "Virtual HID telephony headset for Zoom/Meet";
-                after = [
-                  "pipewire.service"
-                  "pipewire-pulse.service"
-                ];
-                wants = [
-                  "pipewire.service"
-                  "pipewire-pulse.service"
-                ];
-                wantedBy = [ "graphical-session.target" ];
-
-                serviceConfig = {
-                  ExecStart = lib.getExe cfg.package;
-                  Restart = "on-failure";
-                  RestartSec = 5;
-                };
-              };
-            };
+            imports = [
+              (
+                { ... }:
+                {
+                  _module.args.virtual-headset-package = inputs.self.packages.${pkgs.system}.virtual-headset;
+                }
+              )
+              ./nixosModules/default.nix
+            ];
           };
 
         homeManagerModules.default =
+          { pkgs, ... }:
           {
-            config,
-            lib,
-            pkgs,
-            ...
-          }:
-          let
-            cfg = config.programs.virtual-headset-waybar;
-            packages = inputs.self.packages.${pkgs.system};
-          in
-          {
-            options.programs.virtual-headset-waybar = {
-              enable = lib.mkEnableOption "Waybar module for virtual headset mute indicator";
-
-              mutedIcon = lib.mkOption {
-                type = lib.types.str;
-                default = " ";
-                description = "Icon to display when muted";
-              };
-
-              unmutedIcon = lib.mkOption {
-                type = lib.types.str;
-                default = " ";
-                description = "Icon to display when unmuted";
-              };
-            };
-
-            config = lib.mkIf cfg.enable {
-              programs.waybar.settings.mainBar."custom/virtual-headset" = {
-                exec = "${lib.getExe packages.dbus-monitor-mute} ${lib.escapeShellArg cfg.mutedIcon} ${lib.escapeShellArg cfg.unmutedIcon}";
-                return-type = "json";
-                format = "{}";
-                tooltip = true;
-                on-click = lib.getExe packages.dbus-toggle-mute;
-                on-click-right = lib.getExe packages.systemd-restart-virtual-headset;
-              };
-
-              programs.waybar.style = # css
-                ''
-                  #custom-virtual-headset.muted {
-                    padding: 3px 8px;
-                  }
-
-                  #custom-virtual-headset.unmuted {
-                    padding: 3px 8px;
-                    padding-left: 12px;
-                    padding-right: 4px;
-                  }
-                '';
-            };
+            imports = [
+              (
+                { ... }:
+                {
+                  _module.args = {
+                    inherit (inputs.self.packages.${pkgs.system})
+                      dbus-monitor-mute
+                      dbus-toggle-mute
+                      systemd-restart-virtual-headset
+                      ;
+                  };
+                }
+              )
+              ./homeManagerModules/default.nix
+            ];
           };
       };
     };
