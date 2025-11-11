@@ -44,6 +44,7 @@ Add to your `flake.nix`:
 ```
 
 This automatically:
+
 - Sets up udev rules for `/dev/uhid` and `/dev/hidraw*`
 - Creates a systemd user service
 - Adds the package to your environment
@@ -63,6 +64,7 @@ This automatically:
 ```
 
 This adds a Waybar module that:
+
 - Displays real-time mute status with configurable icons
 - Shows initial state on launch
 - Updates instantly when mute state changes
@@ -429,6 +431,7 @@ nix develop
 ```
 
 This provides:
+
 - Rust toolchain (cargo, rustc, rust-analyzer, clippy, rustfmt)
 - Required system libraries
 - Code formatting tools (treefmt)
@@ -440,6 +443,7 @@ treefmt
 ```
 
 Formats:
+
 - Rust code (rustfmt)
 - Nix code (nixfmt)
 - TOML files (taplo)

@@ -45,6 +45,26 @@ impl VirtualHeadset {
         Ok(())
     }
 
+    /// Set mute state to muted
+    fn mute(&self) -> zbus::fdo::Result<()> {
+        if !self.state.get() {
+            self.toggle_tx.send(()).map_err(|e| {
+                zbus::fdo::Error::Failed(format!("Failed to send mute command: {}", e))
+            })?;
+        }
+        Ok(())
+    }
+
+    /// Set mute state to unmuted
+    fn unmute(&self) -> zbus::fdo::Result<()> {
+        if self.state.get() {
+            self.toggle_tx.send(()).map_err(|e| {
+                zbus::fdo::Error::Failed(format!("Failed to send unmute command: {}", e))
+            })?;
+        }
+        Ok(())
+    }
+
     /// Signal emitted when mute state changes
     #[zbus(signal)]
     async fn mute_changed(signal_ctxt: &SignalContext<'_>, muted: bool) -> zbus::Result<()>;
