@@ -206,14 +206,16 @@
         nixosModules.default =
           { pkgs, ... }:
           {
-            _module.args.virtual-headset-package = inputs.self.packages.${pkgs.system}.virtual-headset;
+            _module.args.virtual-headset-package =
+              inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.virtual-headset;
             imports = [ ./nixosModules/default.nix ];
           };
 
         homeManagerModules.default =
           { pkgs, ... }:
           {
-            _module.args.virtual-headset-ctl = inputs.self.packages.${pkgs.system}.virtual-headset-ctl;
+            _module.args.virtual-headset-ctl =
+              inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.virtual-headset-ctl;
             imports = [ ./homeManagerModules/default.nix ];
           };
       };
