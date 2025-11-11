@@ -59,6 +59,19 @@
 }:
 let
   cfg = config.services.virtual-headset;
+
+  udevRules = pkgs.writeTextFile {
+    name = "99-virtual-headset.rules";
+    text = ''
+      # Allow access to /dev/uhid for creating virtual HID devices
+      KERNEL=="uhid", MODE="0660", GROUP="input", TAG+="uaccess"
+
+      # Allow browser WebHID access to virtual headset device
+      # Matches Jabra vendor (0x0b0e) product (0x245e)
+      KERNEL=="hidraw*", KERNELS=="0003:0B0E:245E.*", MODE="0666", TAG+="uaccess"
+    '';
+    destination = "/lib/udev/rules.d/99-virtual-headset.rules";
+  };
 in
 {
   options.services.virtual-headset = {
@@ -95,14 +108,7 @@ in
 
   config = lib.mkIf cfg.enable {
     # Udev rules for device access
-    services.udev.extraRules = ''
-      # Allow access to /dev/uhid for creating virtual HID devices
-      KERNEL=="uhid", MODE="0660", GROUP="input", TAG+="uaccess"
-
-      # Allow browser WebHID access to virtual headset device
-      # Matches Jabra vendor (0x0b0e) product (0x245e)
-      KERNEL=="hidraw*", KERNELS=="0003:0B0E:245E.*", MODE="0666", TAG+="uaccess"
-    '';
+    services.udev.packages = [ udevRules ];
 
     # Add user to input group for uhid access
     users.users.${cfg.user}.extraGroups = [ "input" ];
@@ -127,7 +133,7 @@ in
       # Start automatically on login
       wantedBy = [ "graphical-session.target" ];
 
-      # Restart the service when the package changes (e.g., after nixos-rebuild)
+      # Restart the service when the package changes (e.g., after package update)
       restartTriggers = [ cfg.package ];
 
       serviceConfig = {

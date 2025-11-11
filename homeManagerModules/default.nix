@@ -39,15 +39,13 @@
 #
 # ## How It Works
 #
-# The module uses the `dbus-monitor-mute` utility to subscribe to D-Bus signals
-# from the virtual-headset service. When the mute state changes, it outputs JSON
-# in Waybar's custom module format with the appropriate icon and CSS class.
+# The module uses `dbus-monitor-mute` to subscribe to D-Bus signals from the
+# virtual-headset service. When the mute state changes (controlled by Zoom/Meet
+# via HID LED events), the Rust application emits a D-Bus signal, and Waybar
+# updates instantly with the appropriate icon and CSS class.
 #
-# The D-Bus interface provides:
-# - Service: `com.github.virtual_headset`
-# - Object Path: `/com/github/virtual_headset`
-# - Interface: `com.github.virtual_headset.Mute`
-# - Signal: `MuteChanged(bool muted)`
+# Control is done via `virtual-headset-ctl` which sends HID INPUT reports directly
+# to the device, providing a D-Bus-free way to toggle mute.
 #
 # ## Customization
 #
@@ -66,41 +64,21 @@
 {
   config,
   lib,
-  dbus-monitor-mute ? null,
-  dbus-toggle-mute ? null,
-  systemd-restart-virtual-headset ? null,
+  virtual-headset-ctl ? null,
   ...
 }:
 let
   cfg = config.programs.virtual-headset-waybar;
 
-  # Packages provided by the flake when importing this module
-  packages = {
-    dbus-monitor-mute =
-      if dbus-monitor-mute != null then
-        dbus-monitor-mute
-      else
-        throw ''
-          dbus-monitor-mute package not provided. This module should be imported
-          from the virtual-headset flake which provides the packages automatically.
-        '';
-    dbus-toggle-mute =
-      if dbus-toggle-mute != null then
-        dbus-toggle-mute
-      else
-        throw ''
-          dbus-toggle-mute package not provided. This module should be imported
-          from the virtual-headset flake which provides the packages automatically.
-        '';
-    systemd-restart-virtual-headset =
-      if systemd-restart-virtual-headset != null then
-        systemd-restart-virtual-headset
-      else
-        throw ''
-          systemd-restart-virtual-headset package not provided. This module should be imported
-          from the virtual-headset flake which provides the packages automatically.
-        '';
-  };
+  # Package provided by the flake when importing this module
+  ctl =
+    if virtual-headset-ctl != null then
+      virtual-headset-ctl
+    else
+      throw ''
+        virtual-headset-ctl package not provided. This module should be imported
+        from the virtual-headset flake which provides the package automatically.
+      '';
 in
 {
   options.programs.virtual-headset-waybar = {
@@ -134,13 +112,14 @@ in
   config = lib.mkIf cfg.enable {
     # Configure the Waybar custom module
     programs.waybar.settings.mainBar."custom/virtual-headset" = {
-      # Use the dbus-monitor-mute utility with custom icons
-      exec = "${lib.getExe packages.dbus-monitor-mute} ${lib.escapeShellArg cfg.mutedIcon} ${lib.escapeShellArg cfg.unmutedIcon}";
+      # Monitor mute state via D-Bus for event-driven updates
+      exec = "${lib.getExe ctl} monitor-mute ${lib.escapeShellArg cfg.mutedIcon} ${lib.escapeShellArg cfg.unmutedIcon}";
       return-type = "json";
       format = "{}";
       tooltip = true;
-      on-click = lib.getExe packages.dbus-toggle-mute;
-      on-click-right = lib.getExe packages.systemd-restart-virtual-headset;
+      # Control mute via HID device directly
+      on-click = "${lib.getExe ctl} toggle-mute";
+      on-click-right = "${lib.getExe ctl} restart-service";
     };
 
     # Add default styling for the module

@@ -1,22 +1,13 @@
-override_args := '--override-input devenv-root $"file+file://(pwd)/.devenv/root"'
-
 default:
     @just run
 
-# flake check and build all packages
+# flake check and build all packages in parallel
 check:
-    #!/usr/bin/env nu
-    nix flake check {{ override_args }}
-    nix build {{ override_args }} '.#dbus-monitor-mute'
-    nix build {{ override_args }} '.#dbus-query-mute'
-    nix build {{ override_args }} '.#dbus-toggle-mute'
-    nix build {{ override_args }} '.#systemd-restart-virtual-headset'
-    nix build {{ override_args }} '.#virtual-headset'
+    nix flake check
 
 # show flake outputs
 show:
-    #!/usr/bin/env nu
-    nix flake show {{ override_args }}
+    nix flake show
 
 # update all inputs
 update:
@@ -24,13 +15,11 @@ update:
 
 # build the main package
 build:
-    #!/usr/bin/env nu
-    nix build {{ override_args }}
+    nix build
 
 # run the main package
 run:
-    #!/usr/bin/env nu
-    nix run {{ override_args }}
+    nix run
 
 # These are faster, but use a separate cache. Try to use `just build/run`
 # instead
