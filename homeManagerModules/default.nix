@@ -39,13 +39,13 @@
 #
 # ## How It Works
 #
-# The module uses `dbus-monitor-mute` to subscribe to D-Bus signals from the
+# The module uses `virtual-headset-ctl monitor-mute` to subscribe to D-Bus signals from the
 # virtual-headset service. When the mute state changes (controlled by Zoom/Meet
 # via HID LED events), the Rust application emits a D-Bus signal, and Waybar
 # updates instantly with the appropriate icon and CSS class.
 #
-# Control is done via `virtual-headset-ctl` which sends HID INPUT reports directly
-# to the device, providing a D-Bus-free way to toggle mute.
+# Control is done via `virtual-headset-ctl` which sends HID OUTPUT reports (report ID 3)
+# directly to the device, providing a reliable way to toggle mute.
 #
 # ## Customization
 #
@@ -110,6 +110,9 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # Install virtual-headset-ctl for user access
+    home.packages = [ ctl ];
+
     # Configure the Waybar custom module
     programs.waybar.settings.mainBar."custom/virtual-headset" = {
       # Monitor mute state via D-Bus for event-driven updates

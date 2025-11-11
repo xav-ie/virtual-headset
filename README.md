@@ -38,7 +38,7 @@ cargo build --release --manifest-path packages/virtual-headset/Cargo.toml
 - Linux with kernel HID support (has been out since 2012)
 - PipeWire audio system
 
-If you are not using Nix integration, pleae also make sure you have:
+If you are not using Nix integration, please also make sure you have:
 
 - `pw-loopback` command (usually in `pipewire` package)
 - `pactl` command (usually in `pulseaudio-utils` or `pipewire-pulse` package)
@@ -82,10 +82,23 @@ systemctl --user restart virtual-headset
 - **`q`** or **`Esc`** - Quit and cleanup
 - **`Ctrl+C`** - Emergency quit
 
-## D-Bus Integration
+## Control Integration
 
-The virtual headset exposes its mute state via D-Bus for integration with
-status bars and other tools.
+The virtual headset can be controlled via D-Bus or directly through HID reports.
+
+### virtual-headset-ctl
+
+The `virtual-headset-ctl` utility provides convenient commands:
+
+- **`mute`** - Mute microphone (via HID OUTPUT report)
+- **`unmute`** - Unmute microphone (via HID OUTPUT report)
+- **`toggle-mute`** - Toggle mute state (via HID OUTPUT report)
+- **`mute-dbus`** - Mute via D-Bus
+- **`unmute-dbus`** - Unmute via D-Bus
+- **`toggle-mute-dbus`** - Toggle via D-Bus
+- **`monitor-mute`** - Monitor mute state changes with JSON output for Waybar
+- **`restart-service`** - Restart the systemd service
+- **`find-device`** - Find the hidraw device path
 
 ### D-Bus Interface
 
@@ -93,54 +106,44 @@ status bars and other tools.
 - **Object Path**: `/com/github/virtual_headset`
 - **Interface**: `com.github.virtual_headset.Mute`
 
-### Methods
+**Methods:**
 
-**`IsMuted() -> bool`**
+- `IsMuted() -> bool` - Query current mute state
+- `Mute()` - Mute if not already muted
+- `Unmute()` - Unmute if currently muted
+- `Toggle()` - Toggle the mute state
 
-- Query current mute state
-- Returns `true` if muted, `false` if unmuted
+**Signals:**
 
-**`Toggle()`**
+- `MuteChanged(bool muted)` - Emitted whenever mute state changes
 
-- Toggle the mute state
-- Sends HID button event to connected apps
+### HID Control
 
-### Signals
+The device accepts control commands via HID OUTPUT reports (report ID 3):
 
-**`MuteChanged(bool muted)`**
+- Write `[0x03, 0x01]` to `/dev/hidraw*` to mute
+- Write `[0x03, 0x02]` to `/dev/hidraw*` to unmute
+- Write `[0x03, 0x03]` to `/dev/hidraw*` to toggle
 
-- Emitted whenever mute state changes
-- `muted`: `true` when muted, `false` when unmuted
-
-### Utility Packages
-
-This project includes several Nushell-based utilities for D-Bus interaction:
-
-- **`dbus-monitor-mute`** - Monitor mute state changes with JSON output for Waybar
-- **`dbus-query-mute`** - Query current mute state (exit code: 0=muted, 1=unmuted)
-- **`dbus-toggle-mute`** - Toggle mute state via D-Bus
-- **`systemd-restart-virtual-headset`** - Restart the systemd service
+The daemon receives these and sends INPUT reports to connected applications.
 
 ### Examples
 
-**Query current mute state:**
+**Toggle mute via HID:**
 
 ```bash
-# Using the utility package
-dbus-query-mute
+# Recommended - sends HID OUTPUT report directly
+virtual-headset-ctl toggle-mute
 
-# Or directly with dbus-send
-dbus-send --session --print-reply \
-  --dest=com.github.virtual_headset \
-  /com/github/virtual_headset \
-  com.github.virtual_headset.Mute.IsMuted
+# Or manually to the hidraw device
+echo -ne '\x03\x03' > /dev/hidraw0  # Replace hidraw0 with your device
 ```
 
-**Toggle mute:**
+**Toggle mute via D-Bus:**
 
 ```bash
-# Using the utility package
-dbus-toggle-mute
+# Using virtual-headset-ctl
+virtual-headset-ctl toggle-mute-dbus
 
 # Or directly with dbus-send
 dbus-send --session --print-reply \
@@ -149,11 +152,21 @@ dbus-send --session --print-reply \
   com.github.virtual_headset.Mute.Toggle
 ```
 
+**Query current mute state:**
+
+```bash
+# Via D-Bus
+dbus-send --session --print-reply \
+  --dest=com.github.virtual_headset \
+  /com/github/virtual_headset \
+  com.github.virtual_headset.Mute.IsMuted
+```
+
 **Monitor for changes:**
 
 ```bash
-# Using the utility package (outputs JSON for Waybar)
-dbus-monitor-mute
+# Using virtual-headset-ctl (outputs JSON for Waybar)
+virtual-headset-ctl monitor-mute
 
 # Or directly with dbus-monitor
 dbus-monitor --session \
@@ -164,15 +177,16 @@ dbus-monitor --session \
 
 For Waybar integration, see [homeManagerModules/default.nix](./homeManagerModules/default.nix).
 
-For other status bars, you can use the utility packages:
+For other status bars, you can use `virtual-headset-ctl` commands:
 
 **i3status/i3blocks:**
 
 ```bash
 # Add to your i3blocks config:
 [virtual-headset]
-command=dbus-query-mute && echo "🔇" || echo "🔊"
+command=dbus-send --session --print-reply --dest=com.github.virtual_headset /com/github/virtual_headset com.github.virtual_headset.Mute.IsMuted | grep -q "boolean true" && echo "🔇" || echo "🔊"
 interval=1
+signal=10
 ```
 
 **Polybar:**
@@ -180,42 +194,77 @@ interval=1
 ```ini
 [module/virtual-headset]
 type = custom/script
-exec = dbus-query-mute && echo "🔇" || echo "🔊"
+exec = dbus-send --session --print-reply --dest=com.github.virtual_headset /com/github/virtual_headset com.github.virtual_headset.Mute.IsMuted | grep -q "boolean true" && echo "🔇" || echo "🔊"
 interval = 1
-click-left = dbus-toggle-mute
+click-left = virtual-headset-ctl toggle-mute
 ```
 
 ## How it works
 
 ### Architecture
 
-```
-┌─────────────┐
-│ Real        │
-│ Microphone  │
-└──────┬──────┘
-       │
-       │ PipeWire
-       │ pw-loopback
-       ▼
-┌─────────────────────┐
-│ Virtual_Headset_Mic │  ← Apps connect here
-│ (PipeWire Source)   │
-└─────────────────────┘
+```mermaid
+---
+config:
+  theme: base
+  themeVariables:
+    primaryColor: "#1a0020"
+    primaryTextColor: "#fa99fa"
+    primaryBorderColor: "#aaaafa"
+    lineColor: "#888"
+    fontFamily: "monospace"
+---
+graph TB
+    RealMic[Real Microphone] -->|Audio| Daemon[virtual-headset daemon]
 
-┌─────────────────────┐
-│ Virtual HID Device  │  ← Apps detect this
-│ /dev/hidraw*        │
-│ "Virtual_Headset"   │
-└─────────────────────┘
-       ▲
-       │ USB HID Telephony Protocol
-       │ (Mute button + LED feedback)
-       ▼
-┌─────────────────────┐
-│ Zoom / Google Meet  │
-└─────────────────────┘
+    Daemon -->|Creates| VirtHID[Virtual HID Device<br/>/dev/hidraw]
+    Daemon -->|Creates & forwards audio| VirtMic[Virtual_Headset_Mic]
+    Daemon -->|Emits signals| DBus[D-Bus]
+
+    VirtMic -->|Audio input| Apps[Zoom / Meet]
+    VirtHID -->|HID Input Reports| Apps
+    Apps -->|HID Output Reports| VirtHID
 ```
+
+**How it works:**
+
+- Daemon forwards your real microphone audio to `Virtual_Headset_Mic` via PipeWire
+- Daemon creates a virtual HID device that apps can connect to via WebHID
+- Apps receive mute button events via HID Input Reports and send LED states via HID Output Reports
+
+### Control Interface
+
+```mermaid
+---
+config:
+  theme: base
+  themeVariables:
+    primaryColor: "#1a0020"
+    primaryTextColor: "#fa99fa"
+    primaryBorderColor: "#aaaafa"
+    lineColor: "#888"
+    fontFamily: "monospace"
+---
+graph LR
+    CTL[virtual-headset-ctl]
+    VirtHID["Virtual HID Device<br/>/dev/hidraw*"]
+    Daemon[virtual-headset daemon]
+    DBus[D-Bus]
+    StatusBar[Status Bar / Waybar]
+
+    CTL -->|"HID Output Report ID 3<br/>mute/unmute/toggle"| VirtHID
+    VirtHID --> Daemon
+    Daemon -->|MuteChanged signal| DBus
+    DBus --> StatusBar
+    CTL -->|monitor-mute| DBus
+```
+
+**Control flow:**
+
+- `virtual-headset-ctl` sends control commands by writing HID Output Reports (ID 3) to `/dev/hidraw*`
+- Daemon receives these commands and sends HID Input Reports to connected apps
+- Daemon emits D-Bus `MuteChanged` signals when state changes
+- Status bars monitor D-Bus signals to display current mute state
 
 ### Technical details
 
@@ -227,6 +276,7 @@ click-left = dbus-toggle-mute
 2. **HID Descriptor**: Single Telephony collection with:
    - INPUT Report (ID 1): Hook Switch (bit 0, Absolute) + Phone Mute (bit 1, Relative)
    - OUTPUT Report (ID 2): Mute LED (bit 0) + Off-Hook LED (bit 1) + Ring LED (bit 2)
+   - OUTPUT Report (ID 3): Control commands (0x01=mute, 0x02=unmute, 0x03=toggle)
 
 3. **Audio Routing**: Uses `pw-loopback` to create virtual microphone:
 

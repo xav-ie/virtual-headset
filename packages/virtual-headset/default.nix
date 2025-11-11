@@ -2,6 +2,8 @@
   lib,
   pkgs,
   craneLib,
+  pulseaudio ? pkgs.pulseaudio,
+  pipewire ? pkgs.pipewire,
 }:
 let
   src = craneLib.cleanCargoSource ./.;
@@ -49,8 +51,8 @@ pkgs.symlinkJoin {
     wrapProgram $out/bin/virtual-headset \
       --prefix PATH : ${
         lib.makeBinPath [
-          pkgs.pulseaudio
-          pkgs.pipewire
+          pulseaudio
+          pipewire
         ]
       }
   '';

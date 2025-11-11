@@ -17,6 +17,18 @@ mod pipewire;
 mod dbus_interface;
 use dbus_interface::DBusService;
 
+/// Helper macro to print with appropriate line endings based on terminal mode
+macro_rules! print_msg {
+    ($is_interactive:expr, $($arg:tt)*) => {
+        if $is_interactive {
+            print!($($arg)*);
+            print!("\r\n");
+        } else {
+            println!($($arg)*);
+        }
+    };
+}
+
 struct DeviceState {
     muted: bool,
 }
@@ -117,7 +129,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if is_interactive {
                 print!("D-Bus toggle received, ");
             } else {
-                println!("D-Bus toggle received, muting: {}", state.muted);
+                print_msg!(
+                    is_interactive,
+                    "D-Bus toggle received, muting: {}",
+                    state.muted
+                );
             }
 
             // Send HID mute button pulse (0→1→0 toggles mute state)
@@ -130,18 +146,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if let Some(ref dbus) = dbus {
                 dbus.state().set(state.muted);
                 if let Err(e) = dbus.notify_mute_changed(state.muted) {
-                    if is_interactive {
-                        print!("D-Bus signal error: {}\r\n", e);
-                    } else {
-                        println!("D-Bus signal error: {}", e);
-                    }
+                    print_msg!(is_interactive, "D-Bus signal error: {}", e);
                 }
             }
 
             if is_interactive {
                 print!("Mute: {}\r\n", if state.muted { "ON" } else { "OFF" });
             } else {
-                println!(
+                print_msg!(
+                    is_interactive,
                     "Mute state updated to: {}",
                     if state.muted { "ON" } else { "OFF" }
                 );
@@ -176,7 +189,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         if let Some(ref dbus) = dbus {
                             dbus.state().set(state.muted);
                             if let Err(e) = dbus.notify_mute_changed(state.muted) {
-                                print!("D-Bus signal error: {}\r\n", e);
+                                print_msg!(is_interactive, "D-Bus signal error: {}", e);
                             }
                         }
 
@@ -202,36 +215,92 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(event) => {
                 match event {
                     OutputEvent::Output { data } => {
-                        if data.len() >= 2 && data[0] == 0x02 {
+                        if data.len() < 2 {
+                            continue;
+                        }
+
+                        // Handle LED state OUTPUT (report ID 2)
+                        if data[0] == 0x02 {
                             let mute_led = (data[1] & 0x01) != 0;
                             let hook = (data[1] & 0x02) != 0;
                             let ring = (data[1] & 0x04) != 0;
 
-                            // Sync internal state with what Zoom/host requested
+                            // Sync internal state with what host requested
                             state.muted = mute_led;
 
                             // Update D-Bus state and notify listeners
                             if let Some(ref dbus) = dbus {
                                 dbus.state().set(state.muted);
                                 if let Err(e) = dbus.notify_mute_changed(state.muted) {
-                                    if is_interactive {
-                                        print!("D-Bus signal error: {}\r\n", e);
-                                    } else {
-                                        println!("D-Bus signal error: {}", e);
-                                    }
+                                    print_msg!(is_interactive, "D-Bus signal error: {}", e);
                                 }
                             }
 
-                            if is_interactive {
-                                print!(
-                                    "Host LEDs → Mute:{}, Hook:{}, Ring:{} (state synced)\r\n",
-                                    mute_led, hook, ring
-                                );
-                            } else {
-                                println!(
-                                    "Host LEDs → Mute:{}, Hook:{}, Ring:{} (state synced)",
-                                    mute_led, hook, ring
-                                );
+                            print_msg!(
+                                is_interactive,
+                                "← OUTPUT: mute={}, hook={}, ring={} (LED state from host)",
+                                mute_led,
+                                hook,
+                                ring
+                            );
+                        }
+                        // Handle control command OUTPUT (report ID 3)
+                        else if data[0] == 0x03 {
+                            let command = data[1];
+                            match command {
+                                0x01 => {
+                                    // Mute command
+                                    if !state.muted {
+                                        state.toggle_mute();
+                                        print_msg!(is_interactive, "← OUTPUT: mute command");
+
+                                        // Send INPUT report
+                                        device.write(&[0x01, 0x03])?;
+                                        std::thread::sleep(std::time::Duration::from_millis(50));
+                                        device.write(&[0x01, 0x01])?;
+
+                                        // Update D-Bus
+                                        if let Some(ref dbus) = dbus {
+                                            dbus.state().set(state.muted);
+                                            let _ = dbus.notify_mute_changed(state.muted);
+                                        }
+                                    }
+                                }
+                                0x02 => {
+                                    // Unmute command
+                                    if state.muted {
+                                        state.toggle_mute();
+                                        print_msg!(is_interactive, "← OUTPUT: unmute command");
+
+                                        // Send INPUT report
+                                        device.write(&[0x01, 0x03])?;
+                                        std::thread::sleep(std::time::Duration::from_millis(50));
+                                        device.write(&[0x01, 0x01])?;
+
+                                        // Update D-Bus
+                                        if let Some(ref dbus) = dbus {
+                                            dbus.state().set(state.muted);
+                                            let _ = dbus.notify_mute_changed(state.muted);
+                                        }
+                                    }
+                                }
+                                0x03 => {
+                                    // Toggle command
+                                    state.toggle_mute();
+                                    print_msg!(is_interactive, "← OUTPUT: toggle command");
+
+                                    // Send INPUT report
+                                    device.write(&[0x01, 0x03])?;
+                                    std::thread::sleep(std::time::Duration::from_millis(50));
+                                    device.write(&[0x01, 0x01])?;
+
+                                    // Update D-Bus
+                                    if let Some(ref dbus) = dbus {
+                                        dbus.state().set(state.muted);
+                                        let _ = dbus.notify_mute_changed(state.muted);
+                                    }
+                                }
+                                _ => {}
                             }
                         }
                     }
@@ -251,15 +320,86 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             print!("Failed to reply: {}\r\n", e);
                         }
                     }
-                    OutputEvent::SetReport { id, .. } => {
+                    OutputEvent::SetReport {
+                        id,
+                        report_type,
+                        data,
+                        ..
+                    } => {
+                        use uhid_virt::ReportType;
+                        // Handle feature report control commands
+                        if report_type == ReportType::Feature && data.len() >= 2 && data[0] == 0x03
+                        {
+                            let command = data[1];
+                            match command {
+                                0x01 => {
+                                    // Mute command
+                                    if !state.muted {
+                                        state.toggle_mute();
+                                        print_msg!(is_interactive, "← FEATURE: mute command");
+
+                                        // Send INPUT report
+                                        device.write(&[0x01, 0x03])?;
+                                        std::thread::sleep(std::time::Duration::from_millis(50));
+                                        device.write(&[0x01, 0x01])?;
+
+                                        // Update D-Bus
+                                        if let Some(ref dbus) = dbus {
+                                            dbus.state().set(state.muted);
+                                            let _ = dbus.notify_mute_changed(state.muted);
+                                        }
+                                    }
+                                }
+                                0x02 => {
+                                    // Unmute command
+                                    if state.muted {
+                                        state.toggle_mute();
+                                        print_msg!(is_interactive, "← FEATURE: unmute command");
+
+                                        // Send INPUT report
+                                        device.write(&[0x01, 0x03])?;
+                                        std::thread::sleep(std::time::Duration::from_millis(50));
+                                        device.write(&[0x01, 0x01])?;
+
+                                        // Update D-Bus
+                                        if let Some(ref dbus) = dbus {
+                                            dbus.state().set(state.muted);
+                                            let _ = dbus.notify_mute_changed(state.muted);
+                                        }
+                                    }
+                                }
+                                0x03 => {
+                                    // Toggle command
+                                    state.toggle_mute();
+                                    print_msg!(is_interactive, "← FEATURE: toggle command");
+
+                                    // Send INPUT report
+                                    device.write(&[0x01, 0x03])?;
+                                    std::thread::sleep(std::time::Duration::from_millis(50));
+                                    device.write(&[0x01, 0x01])?;
+
+                                    // Update D-Bus
+                                    if let Some(ref dbus) = dbus {
+                                        dbus.state().set(state.muted);
+                                        let _ = dbus.notify_mute_changed(state.muted);
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+
                         // Acknowledge SetReport
                         let _ = device.write_set_report_reply(id, 0);
                     }
                     OutputEvent::Start { .. } => {
-                        print!("Device opened by host\r\n");
+                        if is_interactive {
+                            print!("Device opened by host\r\n");
+                        }
                     }
                     OutputEvent::Open => {
-                        print!("Device connected\r\n");
+                        if is_interactive {
+                            print!("Device connected\r\n");
+                        }
                     }
                     OutputEvent::Stop | OutputEvent::Close => {
                         // Silently handle disconnect events

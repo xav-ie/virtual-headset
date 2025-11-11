@@ -62,14 +62,15 @@ let
 
   udevRules = pkgs.writeTextFile {
     name = "99-virtual-headset.rules";
-    text = ''
-      # Allow access to /dev/uhid for creating virtual HID devices
-      KERNEL=="uhid", MODE="0660", GROUP="input", TAG+="uaccess"
+    text = # sh
+      ''
+        # Allow access to /dev/uhid for creating virtual HID devices
+        KERNEL=="uhid", MODE="0660", GROUP="input", TAG+="uaccess"
 
-      # Allow browser WebHID access to virtual headset device
-      # Matches Jabra vendor (0x0b0e) product (0x245e)
-      KERNEL=="hidraw*", KERNELS=="0003:0B0E:245E.*", MODE="0666", TAG+="uaccess"
-    '';
+        # Allow browser WebHID access to virtual headset device
+        # Matches Jabra vendor (0x0b0e) product (0x245e)
+        KERNEL=="hidraw*", KERNELS=="0003:0B0E:245E.*", MODE="0666", TAG+="uaccess"
+      '';
     destination = "/lib/udev/rules.d/99-virtual-headset.rules";
   };
 in
@@ -81,7 +82,10 @@ in
       type = lib.types.package;
       default =
         if virtual-headset-package != null then
-          virtual-headset-package
+          virtual-headset-package.override {
+            pipewire = cfg.pipewirePackage;
+            pulseaudio = cfg.pulseaudioPackage;
+          }
         else
           throw ''
             virtual-headset package not provided. This module should be imported
@@ -92,6 +96,26 @@ in
 
         This package provides the main virtual-headset application that creates
         the virtual HID device and manages audio routing through PipeWire.
+      '';
+    };
+
+    pipewirePackage = lib.mkOption {
+      type = lib.types.package;
+      default = config.services.pipewire.package or pkgs.pipewire;
+      description = ''
+        The pipewire package to use for audio routing.
+
+        Defaults to the system's configured pipewire package to reduce closure size.
+      '';
+    };
+
+    pulseaudioPackage = lib.mkOption {
+      type = lib.types.package;
+      default = config.services.pulseaudio.package or pkgs.pulseaudio;
+      description = ''
+        The pulseaudio package to use for pactl commands.
+
+        Defaults to the system's configured pulseaudio package to reduce closure size.
       '';
     };
 

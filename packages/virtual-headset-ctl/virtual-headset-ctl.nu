@@ -28,16 +28,22 @@ def "main find-device" [] {
     error make {msg: "Virtual_Headset device not found"}
 }
 
-# Mute via HID output report, more reliable than dbus
+# Mute via HID OUTPUT report (report ID 3), more reliable than dbus
 def "main mute" [] {
   let device = (main find-device)
-  0x[02 03] | save --raw --force $device
+  0x[03 01] | save --raw --force $device
 }
 
-# Unmute via HID output report, more reliable than dbus
+# Unmute via HID OUTPUT report (report ID 3), more reliable than dbus
 def "main unmute" [] {
   let device = (main find-device)
-  0x[02 02] | save --raw --force $device
+  0x[03 02] | save --raw --force $device
+}
+
+# Toggle mute via HID OUTPUT report (report ID 3), more reliable than dbus
+def "main toggle-mute" [] {
+  let device = (main find-device)
+  0x[03 03] | save --raw --force $device
 }
 
 # Mute via D-Bus
@@ -58,8 +64,8 @@ def "main unmute-dbus" [] {
     com.github.virtual_headset.Mute.Unmute)
 }
 
-# Toggle mute state via dbus since querying via HID is difficult
-def "main toggle-mute" [] {
+# Toggle mute via dbus
+def "main toggle-mute-dbus" [] {
   (^dbus-send --session --print-reply
     --dest=com.github.virtual_headset
     /com/github/virtual_headset
