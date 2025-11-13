@@ -54,7 +54,7 @@
   config,
   lib,
   pkgs,
-  virtual-headset-package ? null,
+  self,
   ...
 }:
 let
@@ -80,17 +80,10 @@ in
 
     package = lib.mkOption {
       type = lib.types.package;
-      default =
-        if virtual-headset-package != null then
-          virtual-headset-package.override {
-            pipewire = cfg.pipewirePackage;
-            pulseaudio = cfg.pulseaudioPackage;
-          }
-        else
-          throw ''
-            virtual-headset package not provided. This module should be imported
-            from the virtual-headset flake which provides the package automatically.
-          '';
+      default = self.packages.${pkgs.stdenv.hostPlatform.system}.virtual-headset.override {
+        pipewire = cfg.pipewirePackage;
+        pulseaudio = cfg.pulseaudioPackage;
+      };
       description = ''
         The virtual-headset package to use.
 

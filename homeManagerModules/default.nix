@@ -64,21 +64,13 @@
 {
   config,
   lib,
-  virtual-headset-ctl ? null,
+  pkgs,
+  self,
   ...
 }:
 let
   cfg = config.programs.virtual-headset-waybar;
-
-  # Package provided by the flake when importing this module
-  ctl =
-    if virtual-headset-ctl != null then
-      virtual-headset-ctl
-    else
-      throw ''
-        virtual-headset-ctl package not provided. This module should be imported
-        from the virtual-headset flake which provides the package automatically.
-      '';
+  ctl = self.packages.${pkgs.stdenv.hostPlatform.system}.virtual-headset-ctl;
 in
 {
   options.programs.virtual-headset-waybar = {
