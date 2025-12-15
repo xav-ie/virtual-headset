@@ -77,11 +77,30 @@ def "main restart-service" [] {
   systemctl --user restart virtual-headset.service
 }
 
+# Get the description of the default audio source being forwarded
+def "main get-source" [] {
+    let source_name = (^pactl get-default-source | str trim)
+    let sources = (^pactl list sources | lines)
+    mut found_source = false
+    for line in $sources {
+        let trimmed = ($line | str trim)
+        if ($trimmed | str starts-with "Name: ") and ($trimmed | str contains $source_name) {
+            $found_source = true
+        } else if $found_source and ($trimmed | str starts-with "Description: ") {
+            return ($trimmed | str replace "Description: " "")
+        }
+    }
+    $source_name
+}
+
 # Monitor mute state via D-Bus and output JSON for Waybar
 def "main monitor-mute" [
   muted_icon: string = " " # Icon to display when muted
   unmuted_icon: string = " " # Icon to display when unmuted
 ] {
+    # Get the source description for the tooltip
+    let source_desc = (main get-source)
+
     # Query initial state
     let initial = (^dbus-send --session --print-reply
         --dest=com.github.virtual_headset
@@ -91,9 +110,9 @@ def "main monitor-mute" [
     if $initial.exit_code == 0 {
         let is_muted = ($initial.stdout | str contains "boolean true")
         if $is_muted {
-            print $'{"text":"($muted_icon)","tooltip":"Muted","class":"muted"}'
+            print $'{"text":"($muted_icon)","tooltip":"Muted: ($source_desc)","class":"muted"}'
         } else {
-            print $'{"text":"($unmuted_icon)","tooltip":"Unmuted","class":"unmuted"}'
+            print $'{"text":"($unmuted_icon)","tooltip":"Unmuted: ($source_desc)","class":"unmuted"}'
         }
     }
 
@@ -104,9 +123,9 @@ def "main monitor-mute" [
         if ($line =~ 'boolean\s+(true|false)') {
             let muted = ($line | parse -r 'boolean\s+(?<value>true|false)' | get value.0)
             if $muted == "true" {
-                print $'{"text":"($muted_icon)","tooltip":"Muted","class":"muted"}'
+                print $'{"text":"($muted_icon)","tooltip":"Muted: ($source_desc)","class":"muted"}'
             } else {
-                print $'{"text":"($unmuted_icon)","tooltip":"Unmuted","class":"unmuted"}'
+                print $'{"text":"($unmuted_icon)","tooltip":"Unmuted: ($source_desc)","class":"unmuted"}'
             }
         }
     }
