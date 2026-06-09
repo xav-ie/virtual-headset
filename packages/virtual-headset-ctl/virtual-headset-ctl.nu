@@ -93,14 +93,21 @@ def "main get-source" [] {
     $source_name
 }
 
+# Helper to output waybar JSON with current source (fetched dynamically)
+def output-waybar-json [muted: bool, muted_icon: string, unmuted_icon: string] {
+    let source_desc = (main get-source)
+    if $muted {
+        print $'{"text":"($muted_icon)","tooltip":"Muted: ($source_desc)","class":"muted"}'
+    } else {
+        print $'{"text":"($unmuted_icon)","tooltip":"Unmuted: ($source_desc)","class":"unmuted"}'
+    }
+}
+
 # Monitor mute state via D-Bus and output JSON for Waybar
 def "main monitor-mute" [
   muted_icon: string = " " # Icon to display when muted
   unmuted_icon: string = " " # Icon to display when unmuted
 ] {
-    # Get the source description for the tooltip
-    let source_desc = (main get-source)
-
     # Query initial state
     let initial = (^dbus-send --session --print-reply
         --dest=com.github.virtual_headset
@@ -109,11 +116,7 @@ def "main monitor-mute" [
 
     if $initial.exit_code == 0 {
         let is_muted = ($initial.stdout | str contains "boolean true")
-        if $is_muted {
-            print $'{"text":"($muted_icon)","tooltip":"Muted: ($source_desc)","class":"muted"}'
-        } else {
-            print $'{"text":"($unmuted_icon)","tooltip":"Unmuted: ($source_desc)","class":"unmuted"}'
-        }
+        output-waybar-json $is_muted $muted_icon $unmuted_icon
     }
 
     # Monitor for changes
@@ -121,12 +124,8 @@ def "main monitor-mute" [
     | lines
     | each { |line|
         if ($line =~ 'boolean\s+(true|false)') {
-            let muted = ($line | parse -r 'boolean\s+(?<value>true|false)' | get value.0)
-            if $muted == "true" {
-                print $'{"text":"($muted_icon)","tooltip":"Muted: ($source_desc)","class":"muted"}'
-            } else {
-                print $'{"text":"($unmuted_icon)","tooltip":"Unmuted: ($source_desc)","class":"unmuted"}'
-            }
+            let muted = ($line | parse -r 'boolean\s+(?<value>true|false)' | get value.0) == "true"
+            output-waybar-json $muted $muted_icon $unmuted_icon
         }
     }
 }
