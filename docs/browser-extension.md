@@ -74,9 +74,16 @@ signed by CI, not by hand.
 # Mozilla AMO API key (https://addons.mozilla.org/developers/addon/api/key/) — signs the .xpi
 gh secret set AMO_JWT_ISSUER --repo xav-ie/virtual-headset
 gh secret set AMO_JWT_SECRET --repo xav-ie/virtual-headset
-# A PAT with contents:write — lets the Version PR's tag push trigger release.yml
-# (tags pushed with the default GITHUB_TOKEN do not trigger other workflows).
-gh secret set RELEASE_PAT --repo xav-ie/virtual-headset
+```
+
+`version.yml` authenticates as a **GitHub App** (so the Version PR is opened by a
+bot, and its tag push can trigger `release.yml` — the default `GITHUB_TOKEN`
+cannot). Create an app with Contents + Pull requests = read/write, install it on
+the repo, then store:
+
+```bash
+gh secret set APP_ID --repo xav-ie/virtual-headset --body "<app id>"
+gh secret set APP_PRIVATE_KEY --repo xav-ie/virtual-headset < /path/to/key.pem
 ```
 
 **Per change:** add a changeset describing it, and commit the generated file:
@@ -93,7 +100,7 @@ extension on Mozilla's **unlisted** (self-distribution) channel — signed in
 seconds, no human review — and publish the signed `virtual_headset.xpi` +
 `updates.json` to a GitHub Release. Installed copies auto-update from there.
 
-> Prefer to release without the bot (or haven't set `RELEASE_PAT`)? `just release`
+> Prefer to release without the bot (or haven't set up the app)? `just release`
 > does the same version bump + tag locally.
 
 ## Install (without Nix)
