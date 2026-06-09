@@ -1,6 +1,6 @@
 {
   "name": "virtual-headset-bridge-extension",
-  "version": "0.2.0",
+  "version": "0.0.0",
   "private": true,
   "description": "Firefox extension bridging the virtual headset to the Zoom/Meet web apps",
   "type": "module",

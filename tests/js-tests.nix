@@ -34,7 +34,7 @@ in
   extension-unit = vitestCheck {
     pname = "virtual-headset-extension-unit";
     src = ../extension;
-    npmDepsHash = "sha256-PAkqJQ11Ni0+eyyMsTuyClSrvWqlwAoOACcwCRBsAok=";
+    npmDepsHash = "sha256-vSlVib/NnjxjvjtGvPNVbAJ+XfSLdEbZTzc2S0wtvzc=";
   };
 
   panel-unit = vitestCheck {

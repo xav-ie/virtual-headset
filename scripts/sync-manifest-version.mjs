@@ -6,6 +6,11 @@
 // Regex-replace the top-level "version" field so the manifest's formatting and
 // key order are preserved. The pattern does NOT match "manifest_version" (the
 // character before `version` there is `_`, not a quote) or "strict_min_version".
+//
+// Deliberately NOT synced: extension/package.json stays at 0.0.0 (it's only the
+// npm manifest for the build tooling, like the panel package). Bumping it would
+// change extension/package-lock.json, which invalidates the npmDepsHash pinned
+// in tests/js-tests.nix and breaks `nix flake check`.
 import { readFileSync, writeFileSync } from "node:fs";
 
 const root = new URL("../", import.meta.url);
