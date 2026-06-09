@@ -65,26 +65,36 @@ Then load it via **about:debugging → This Firefox → Load Temporary Add-on**.
 
 ## Releasing a signed build
 
-The signed `.xpi` is produced by CI, not by hand. One-time setup: create a
-[Mozilla AMO API key](https://addons.mozilla.org/developers/addon/api/key/) and
-add it as repo secrets:
+Releases are driven by [changesets](https://github.com/changesets/changesets) and
+signed by CI, not by hand.
+
+**One-time setup — repo secrets:**
 
 ```bash
+# Mozilla AMO API key (https://addons.mozilla.org/developers/addon/api/key/) — signs the .xpi
 gh secret set AMO_JWT_ISSUER --repo xav-ie/virtual-headset
 gh secret set AMO_JWT_SECRET --repo xav-ie/virtual-headset
+# A PAT with contents:write — lets the Version PR's tag push trigger release.yml
+# (tags pushed with the default GITHUB_TOKEN do not trigger other workflows).
+gh secret set RELEASE_PAT --repo xav-ie/virtual-headset
 ```
 
-Then each release is one command:
+**Per change:** add a changeset describing it, and commit the generated file:
 
 ```bash
-just release 0.2.0
+just changeset        # pick patch/minor/major, write a summary
 ```
 
-That bumps the version, tags `v0.2.0`, and pushes. The
-[`release.yml`](../.github/workflows/release.yml) workflow signs the extension on
-Mozilla's **unlisted** (self-distribution) channel — signed in seconds, no human
-review — and publishes the signed `virtual_headset.xpi` + an `updates.json` to a
-GitHub Release. Installed copies auto-update from there.
+**To ship:** [`version.yml`](../.github/workflows/version.yml) opens/updates a
+**"chore: version packages"** PR that bumps the version, syncs it into
+`manifest.json`, and writes `CHANGELOG.md`. Merging that PR pushes a `v<version>`
+tag, which triggers [`release.yml`](../.github/workflows/release.yml) to sign the
+extension on Mozilla's **unlisted** (self-distribution) channel — signed in
+seconds, no human review — and publish the signed `virtual_headset.xpi` +
+`updates.json` to a GitHub Release. Installed copies auto-update from there.
+
+> Prefer to release without the bot (or haven't set `RELEASE_PAT`)? `just release`
+> does the same version bump + tag locally.
 
 ## Install (without Nix)
 

@@ -1,0 +1,56 @@
+name: Version
+
+# Changesets-driven release automation. On push to main:
+#   * pending .changeset/*.md  -> open/update the "chore: version packages" PR
+#     (bumps the version, syncs it into the manifest, writes CHANGELOG.md).
+#   * none pending             -> run `npm run tag`, which tags v<version> and
+#     pushes it, triggering release.yml (sign + publish the .xpi).
+#
+# For the tag push to trigger release.yml, checkout must use a PAT with
+# contents:write stored as the RELEASE_PAT secret (tags pushed with the default
+# GITHUB_TOKEN do not trigger other workflows). Without RELEASE_PAT the Version
+# PR still works, but the release tag must be pushed manually (e.g. just release).
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: version
+  cancel-in-progress: false
+
+jobs:
+  version:
+    if: github.repository == 'xav-ie/virtual-headset'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create Version PR or tag a release
+        uses: changesets/action@v1
+        with:
+          version: npm run version
+          publish: npm run tag
+          commit: "chore: version packages"
+          title: "chore: version packages"
+          createGithubReleases: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}

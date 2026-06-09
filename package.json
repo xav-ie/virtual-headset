@@ -1,0 +1,14 @@
+{
+  "name": "virtual-headset",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Release tooling (changesets) for the Virtual Headset Firefox extension. This root package is the version source of truth; scripts/sync-manifest-version.mjs propagates it into extension/static/manifest.json, which the Nix build reads.",
+  "scripts": {
+    "changeset": "changeset",
+    "version": "changeset version && node scripts/sync-manifest-version.mjs && npm install --package-lock-only",
+    "tag": "node scripts/tag-release.mjs"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.30.0"
+  }
+}
