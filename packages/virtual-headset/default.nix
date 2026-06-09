@@ -4,6 +4,10 @@
   craneLib,
   pulseaudio ? pkgs.pulseaudio,
   pipewire ? pkgs.pipewire,
+  # For the bridge's source listing/selection (listSources/setSource). Optional
+  # so the package still builds standalone; the native-host wrapping is skipped
+  # when null.
+  virtual-headset-ctl ? null,
 }:
 let
   src = craneLib.cleanCargoSource ./.;
@@ -55,6 +59,12 @@ pkgs.symlinkJoin {
           pipewire
         ]
       }
+    ${lib.optionalString (virtual-headset-ctl != null) ''
+      # The native-messaging bridge shells out to virtual-headset-ctl for
+      # source listing/selection.
+      wrapProgram $out/bin/virtual-headset-bridge \
+        --prefix PATH : ${lib.makeBinPath [ virtual-headset-ctl ]}
+    ''}
   '';
   meta = unwrapped.meta // {
     mainProgram = "virtual-headset";

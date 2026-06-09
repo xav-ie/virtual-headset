@@ -1,0 +1,13 @@
+{
+  "name": "virtual-headset-webhid-tester",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Manual WebHID page for poking the virtual headset device in Chromium",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "devDependencies": {
+    "vite": "^7.2.2"
+  }
+}

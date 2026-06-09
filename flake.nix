@@ -2,7 +2,7 @@
   description = "Virtual HID telephony headset for Zoom and Google Meet";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
     flake-parts.url = "github:hercules-ci/flake-parts";
     systems.url = "github:nix-systems/default-linux";
     treefmt-nix.url = "github:numtide/treefmt-nix";
@@ -10,8 +10,10 @@
     crane.url = "github:ipetkov/crane";
     nuenv.url = "github:xav-ie/nuenv";
     nuenv.inputs.nixpkgs.follows = "nixpkgs";
-    home-manager.url = "github:nix-community/home-manager";
+    home-manager.url = "github:nix-community/home-manager/release-26.05";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
+    ags.url = "github:aylur/ags";
+    ags.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   nixConfig = {
@@ -48,6 +50,7 @@
             (import ./packages {
               inherit pkgs craneLib;
               nuenv = inputs.nuenv.lib;
+              agsPackages = inputs.ags.packages.${system};
             })
             // {
               default = config.packages.virtual-headset;
@@ -122,84 +125,25 @@
                 import ./packages {
                   inherit pkgs craneLib;
                   nuenv = inputs.nuenv.lib;
+                  agsPackages = inputs.ags.packages.${system};
                 }
               );
             };
 
-            # Test that NixOS and Home Manager modules work in a VM
-            modules = pkgs.testers.nixosTest {
-              name = "virtual-headset-modules";
-              nodes.machine =
-                { config, pkgs, ... }:
-                {
-                  imports = [
-                    inputs.self.nixosModules.default
-                    inputs.home-manager.nixosModules.home-manager
-                  ];
+            # Module wiring (udev, input group, Waybar, Firefox host). The VM
+            # test definition + its script live in ./tests/nixos.
+            modules = import ./tests/nixos/modules.nix { inherit pkgs inputs system; };
 
-                  # NixOS module configuration
-                  services.virtual-headset = {
-                    enable = true;
-                    user = "test";
-                  };
+            # Runtime behaviour in a booted VM (starts muted, toggle, sources).
+            # Definition + script live in ./tests/nixos.
+            runtime = import ./tests/nixos/runtime.nix { inherit pkgs inputs system; };
 
-                  users.users.test = {
-                    isNormalUser = true;
-                  };
-
-                  # Home Manager module configuration
-                  home-manager.users.test = {
-                    imports = [ inputs.self.homeManagerModules.default ];
-
-                    programs.waybar.enable = true;
-                    programs.virtual-headset-waybar = {
-                      enable = true;
-                      mutedIcon = "🔇";
-                      unmutedIcon = "🔊";
-                    };
-
-                    home.stateVersion = "24.05";
-                  };
-                };
-
-              testScript = # python
-                ''
-                  machine.wait_for_unit("multi-user.target")
-
-                  # NixOS module tests
-                  # Check that packages are installed
-                  machine.succeed("which virtual-headset")
-                  # Check that user is in input group
-                  machine.succeed("groups test | grep input")
-                  # Check that udev rules file exists
-                  machine.succeed("test -f /etc/udev/rules.d/99-virtual-headset.rules")
-                  # Check that udev rules contain our configuration
-                  machine.succeed("grep 'KERNEL==\"uhid\"' /etc/udev/rules.d/99-virtual-headset.rules")
-
-                  # Home Manager module tests
-                  # Check that waybar config contains our custom module
-                  config_path = "/home/test/.config/waybar/config"
-                  machine.succeed(f"test -f {config_path}")
-
-                  # Verify the custom/virtual-headset module is configured
-                  machine.succeed(f"grep 'custom/virtual-headset' {config_path}")
-
-                  # Verify the exec command includes monitor-mute with our custom icons
-                  machine.succeed(f"grep 'monitor-mute' {config_path}")
-                  machine.succeed(f"grep '🔇' {config_path}")
-                  machine.succeed(f"grep '🔊' {config_path}")
-
-                  # Verify click handlers are configured
-                  machine.succeed(f"grep 'toggle-mute' {config_path}")
-                  machine.succeed(f"grep 'restart-service' {config_path}")
-
-                  # Check that waybar style includes our custom CSS
-                  style_path = "/home/test/.config/waybar/style.css"
-                  machine.succeed(f"test -f {style_path}")
-                  machine.succeed(f"grep 'custom-virtual-headset' {style_path}")
-                '';
-            };
-          };
+            # Browser-extension install end to end: native-host registration,
+            # id match, and driving the bridge as Firefox would.
+            extension = import ./tests/nixos/extension.nix { inherit pkgs inputs system; };
+          }
+          # TypeScript unit tests (extension adapters/reconciler + panel logic).
+          // (import ./tests/js-tests.nix { inherit pkgs; });
         };
 
       flake = {
@@ -210,12 +154,25 @@
             imports = [ ./nixosModules/default.nix ];
           };
 
+        # Pass `self` by closure rather than `_module.args.self` so importing
+        # several of these modules together doesn't collide on that arg.
         homeManagerModules.default =
-          { pkgs, ... }:
           {
-            _module.args.self = inputs.self;
-            imports = [ ./homeManagerModules/default.nix ];
-          };
+            config,
+            lib,
+            pkgs,
+            ...
+          }@args:
+          import ./homeManagerModules/default.nix (args // { self = inputs.self; });
+
+        homeManagerModules.firefox =
+          {
+            config,
+            lib,
+            pkgs,
+            ...
+          }@args:
+          import ./homeManagerModules/firefox.nix (args // { self = inputs.self; });
       };
     };
 }

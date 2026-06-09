@@ -1,0 +1,59 @@
+// Structural + a couple of targeted accents. Base colours come from the (dark)
+// Adwaita theme via style classes (`background`, `flat`, `destructive-action`,
+// `dim-label`, `title-4`). The layer surface is transparent; `.background` is
+// the card.
+
+window {
+  background-color: transparent;
+}
+
+.vh-panel {
+  padding: 14px;
+  border-radius: 16px;
+  min-width: 360px;
+}
+
+.vh-icon-btn {
+  min-width: 0;
+  padding: 4px 6px;
+}
+
+// Mute + Restart row, equal width.
+.vh-ctl-btn {
+  padding: 12px;
+  border-radius: 10px;
+  font-weight: bold;
+}
+
+// Live mic: themed red background needs white text for contrast.
+.vh-ctl-btn.destructive-action,
+.vh-ctl-btn.destructive-action label {
+  color: #ffffff;
+}
+
+.vh-source {
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+
+// The forwarded source: clearly highlighted (the row stays sensitive, so it
+// isn't dimmed by GTK's disabled styling). `unquote` passes GTK's named theme
+// colours through sass, which would otherwise choke on the `@` syntax.
+.vh-source.active {
+  background-color: unquote("@theme_selected_bg_color");
+  color: unquote("@theme_selected_fg_color");
+}
+
+.vh-source.active label {
+  color: unquote("@theme_selected_fg_color");
+  font-weight: bold;
+}
+
+// Keeps inactive rows' text aligned with the checkmark on active rows.
+.vh-check-spacer {
+  min-width: 14px;
+}
+
+.vh-chip {
+  font-size: 0.8em;
+}

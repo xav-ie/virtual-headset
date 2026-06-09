@@ -77,20 +77,67 @@ def "main restart-service" [] {
   systemctl --user restart virtual-headset.service
 }
 
-# Get the description of the default audio source being forwarded
+# Path to the configured-source file. Must match the daemon's lookup
+# (src/pipewire.rs): $XDG_CONFIG_HOME/virtual-headset/source, falling back to
+# ~/.config/virtual-headset/source.
+def vh-config-path [] {
+    let base = ($env.XDG_CONFIG_HOME? | default $"($env.HOME)/.config")
+    $"($base)/virtual-headset/source"
+}
+
+# The configured source name, or "" if none is set.
+def vh-configured-source [] {
+    let p = (vh-config-path)
+    if ($p | path exists) { (open --raw $p | str trim) } else { "" }
+}
+
+# Get the description of the source currently being forwarded: the configured
+# one if set, otherwise the system default.
 def "main get-source" [] {
-    let source_name = (^pactl get-default-source | str trim)
-    let sources = (^pactl list sources | lines)
-    mut found_source = false
-    for line in $sources {
-        let trimmed = ($line | str trim)
-        if ($trimmed | str starts-with "Name: ") and ($trimmed | str contains $source_name) {
-            $found_source = true
-        } else if $found_source and ($trimmed | str starts-with "Description: ") {
-            return ($trimmed | str replace "Description: " "")
-        }
+    let configured = (vh-configured-source)
+    let target = (if ($configured != "") { $configured } else { (^pactl get-default-source | str trim) })
+    let match = (^pactl --format=json list sources | from json | where name == $target)
+    if ($match | is-empty) { $target } else { ($match | first | get description) }
+}
+
+# List selectable input sources as JSON (for source pickers). Excludes monitor
+# sources and the virtual headset's own output. Each entry is marked with
+# whether it is the system default and/or the configured source.
+def "main list-sources" [] {
+    let default = (^pactl get-default-source | str trim)
+    let configured = (vh-configured-source)
+    ^pactl --format=json list sources
+    | from json
+    | where {|s| (not ($s.name | str ends-with ".monitor")) and ($s.name != "Virtual_Headset_Mic") }
+    | each {|s| {
+        name: $s.name
+        description: $s.description
+        default: ($s.name == $default)
+        configured: (($configured != "") and ($s.name == $configured))
+      } }
+    | sort-by description
+    | to json --raw
+}
+
+# Set the source the virtual headset forwards, then restart the service to
+# apply it. Note: this restarts the daemon, so the virtual mic drops briefly —
+# a between-meetings action.
+def "main set-source" [name: string] {
+    let exists = (^pactl --format=json list sources | from json | any {|s| $s.name == $name })
+    if not $exists {
+        error make {msg: $"Source not found: ($name)"}
     }
-    $source_name
+    let p = (vh-config-path)
+    mkdir ($p | path dirname)
+    $name | save --force --raw $p
+    systemctl --user restart virtual-headset.service
+}
+
+# Revert to forwarding the system default source, then restart the service.
+def "main clear-source" [] {
+    let p = (vh-config-path)
+    if ($p | path exists) { rm $p }
+    systemctl --user restart virtual-headset.service
 }
 
 # Helper to output waybar JSON with current source (fetched dynamically)

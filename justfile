@@ -1,7 +1,9 @@
 default:
     @just run
 
-# flake check and build all packages in parallel
+# flake check — runs everything: builds all packages, the NixOS VM tests
+# (modules, runtime, extension install), the TypeScript unit tests (extension +
+# panel), and treefmt
 check:
     nix flake check
 
