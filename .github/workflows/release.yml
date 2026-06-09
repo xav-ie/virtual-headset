@@ -56,11 +56,17 @@ jobs:
           AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
           AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
         run: |
+          # web-ext writes a `.amo-upload-uuid` marker into the source dir, so it
+          # must be writable — but the Nix build output lives in the read-only
+          # store. Sign from a writable copy.
+          rm -rf ext-src
+          cp -rL result/share/virtual-headset-firefox/extension ext-src
+          chmod -R u+w ext-src
           nix run nixpkgs#web-ext -- sign \
             --channel=unlisted \
             --api-key="$AMO_JWT_ISSUER" \
             --api-secret="$AMO_JWT_SECRET" \
-            --source-dir=result/share/virtual-headset-firefox/extension \
+            --source-dir=ext-src \
             --artifacts-dir=web-ext-artifacts
           # Stable asset name so the manifest update_url / force-install URL never
           # change across releases.
