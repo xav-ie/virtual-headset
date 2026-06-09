@@ -32,7 +32,9 @@ release VERSION:
     nix build .#virtual-headset-firefox
     git add extension/static/manifest.json extension/package.json
     git commit -m "release: v$version"
-    git tag "v$version"
+    # Annotated tag (a message is required when tag.forceSignAnnotated/gpgSign is
+    # set); --follow-tags only pushes annotated tags anyway.
+    git tag -m "v$version" "v$version"
     git push --follow-tags
     echo "Pushed v$version — watch the release workflow: gh run watch"
 
