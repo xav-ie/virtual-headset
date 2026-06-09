@@ -1,8 +1,17 @@
 name: CI
 
+# Run once per change: `pull_request` covers branches/PRs, `push` only on main
+# (post-merge). Scoping push to main avoids the double run you'd get when a
+# same-repo branch has an open PR (push + pull_request both firing).
 on:
   push:
+    branches: [main]
   pull_request:
+
+# Supersede in-progress runs for the same ref (the VM tests are expensive).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   check:
