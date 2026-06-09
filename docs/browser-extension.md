@@ -38,25 +38,53 @@ graph LR
 {
   imports = [ virtual-headset.homeManagerModules.firefox ];
   programs.virtual-headset-firefox.enable = true;
+  # Install the Mozilla-signed extension declaratively (requires programs.firefox).
+  programs.virtual-headset-firefox.installExtension = true;
 }
 ```
 
 This registers the native-messaging host at
-`~/.mozilla/native-messaging-hosts/virtual_headset_bridge.json` and puts the
-packaged extension on your profile. Find the unpacked extension:
+`~/.mozilla/native-messaging-hosts/virtual_headset_bridge.json` and, with
+`installExtension = true`, sets a Firefox force-install policy pointing at the
+signed `.xpi` from the latest GitHub release. Firefox installs and enables it on
+every profile with no prompt, and **auto-updates** it via the manifest's
+`update_url` — nothing to load by hand, and it survives restarts.
+
+> If your `programs.firefox` package override drops Home-Manager-applied policies,
+> add the same block via `extraPolicies.ExtensionSettings` in your override.
+
+Prefer to hack on the site adapters? The unsigned dev build is still handy as a
+temporary add-on (it resets on restart):
 
 ```bash
 nix build .#virtual-headset-firefox
 ls ./result/share/virtual-headset-firefox/extension   # load manifest.json from here
 ```
 
-Then load it in Firefox via **about:debugging → This Firefox → Load Temporary
-Add-on** and pick that `manifest.json`.
+Then load it via **about:debugging → This Firefox → Load Temporary Add-on**.
 
-> The build also produces an unsigned `virtual-headset@local.xpi`. A temporary
-> add-on resets on restart. Installing it permanently on release Firefox requires
-> signing it (`web-ext sign --channel=unlisted`), or using Firefox Developer
-> Edition/ESR with `xpinstall.signatures.required = false`.
+## Releasing a signed build
+
+The signed `.xpi` is produced by CI, not by hand. One-time setup: create a
+[Mozilla AMO API key](https://addons.mozilla.org/developers/addon/api/key/) and
+add it as repo secrets:
+
+```bash
+gh secret set AMO_JWT_ISSUER --repo xav-ie/virtual-headset
+gh secret set AMO_JWT_SECRET --repo xav-ie/virtual-headset
+```
+
+Then each release is one command:
+
+```bash
+just release 0.2.0
+```
+
+That bumps the version, tags `v0.2.0`, and pushes. The
+[`release.yml`](../.github/workflows/release.yml) workflow signs the extension on
+Mozilla's **unlisted** (self-distribution) channel — signed in seconds, no human
+review — and publishes the signed `virtual_headset.xpi` + an `updates.json` to a
+GitHub Release. Installed copies auto-update from there.
 
 ## Install (without Nix)
 

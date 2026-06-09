@@ -1,0 +1,103 @@
+name: Release
+
+# Cut a release by pushing a `v*` tag (use `just release X.Y.Z`). This signs the
+# Firefox extension with Mozilla on the *unlisted* (self-distribution) channel —
+# AMO signs it in seconds with no human review, unlike the listed channel which
+# manual-reviews every nativeMessaging submission — then publishes the signed
+# .xpi plus an `updates.json` to the GitHub Release. Firefox installs the signed
+# build and auto-updates via the manifest's `update_url`, which points at this
+# release's `updates.json`.
+#
+# Requires two repo secrets (Mozilla AMO API key, https://addons.mozilla.org/developers/addon/api/key/):
+#   gh secret set AMO_JWT_ISSUER --repo xav-ie/virtual-headset
+#   gh secret set AMO_JWT_SECRET --repo xav-ie/virtual-headset
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+
+      # The tag drives the version; manifest.json is the source of truth, so they
+      # must agree (the `just release` recipe keeps them in sync — fail loudly if
+      # a tag was pushed by hand without bumping the manifest).
+      - name: Resolve and check version
+        id: version
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          manifest_version="$(nix run nixpkgs#jq -- -r .version extension/static/manifest.json)"
+          if [ "$version" != "$manifest_version" ]; then
+            echo "::error::tag $tag (=> $version) does not match manifest.json version $manifest_version" >&2
+            exit 1
+          fi
+          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+
+      # Build the unpacked extension (static assets + esbuild-bundled JS).
+      - name: Build extension
+        run: nix build .#virtual-headset-firefox
+
+      # Sign on the unlisted channel. web-ext zips the source dir, uploads to AMO,
+      # waits for signing, and writes the signed .xpi to web-ext-artifacts/.
+      - name: Sign extension (Mozilla, unlisted)
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          nix run nixpkgs#web-ext -- sign \
+            --channel=unlisted \
+            --api-key="$AMO_JWT_ISSUER" \
+            --api-secret="$AMO_JWT_SECRET" \
+            --source-dir=result/share/virtual-headset-firefox/extension \
+            --artifacts-dir=web-ext-artifacts
+          # Stable asset name so the manifest update_url / force-install URL never
+          # change across releases.
+          signed="$(find web-ext-artifacts -name '*.xpi' -print -quit)"
+          if [ -z "$signed" ]; then
+            echo "::error::web-ext produced no signed .xpi" >&2
+            exit 1
+          fi
+          cp "$signed" virtual_headset.xpi
+
+      # Firefox update manifest. The update_link points at this tag's versioned
+      # asset; the manifest's update_url (latest/download/updates.json) always
+      # resolves to the newest release's copy of this file.
+      - name: Generate updates.json
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          tag="${{ steps.version.outputs.tag }}"
+          cat >updates.json <<EOF
+          {
+            "addons": {
+              "virtual-headset@local": {
+                "updates": [
+                  {
+                    "version": "$version",
+                    "update_link": "https://github.com/${GITHUB_REPOSITORY}/releases/download/$tag/virtual_headset.xpi"
+                  }
+                ]
+              }
+            }
+          }
+          EOF
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" \
+            virtual_headset.xpi updates.json \
+            --title "${{ steps.version.outputs.tag }}" \
+            --generate-notes

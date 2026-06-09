@@ -17,9 +17,18 @@
 # This installs the native-messaging host manifest at
 # `~/.mozilla/native-messaging-hosts/virtual_headset_bridge.json`.
 #
-# The extension itself is unsigned. Load it as a temporary add-on via
-# `about:debugging` -> This Firefox -> Load Temporary Add-on, pointing at the
-# `manifest.json` inside:
+# ## Installing the extension itself
+#
+# Set `installExtension = true` to install the Mozilla-signed extension
+# declaratively: this sets a Firefox `ExtensionSettings` force-install policy
+# pointing at the signed .xpi published to GitHub Releases (see
+# ../.github/workflows/release.yml). Firefox installs and enables it on every
+# profile with no prompt, and auto-updates it via the manifest's `update_url`.
+# Requires that `programs.firefox` manages the browser so the policy is applied.
+#
+# Without `installExtension`, only the native host is registered; you can still
+# load the *unsigned* dev build as a temporary add-on via `about:debugging` ->
+# This Firefox -> Load Temporary Add-on, pointing at the `manifest.json` inside:
 #
 #   <virtual-headset-firefox>/share/virtual-headset-firefox/extension/
 #
@@ -62,6 +71,30 @@ in
         manifest.json.
       '';
     };
+
+    installExtension = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Install the Mozilla-signed extension declaratively via a Firefox
+        `ExtensionSettings` force-install policy (`installation_mode =
+        "force_installed"`). Firefox installs and enables it on every profile
+        with no prompt, and auto-updates it through the manifest's `update_url`.
+
+        Requires `programs.firefox` to manage Firefox so the policy is applied.
+        Leave `false` to register only the native host and load the unsigned dev
+        build manually.
+      '';
+    };
+
+    extensionUrl = lib.mkOption {
+      type = lib.types.str;
+      default = "https://github.com/xav-ie/virtual-headset/releases/latest/download/virtual_headset.xpi";
+      description = ''
+        URL of the signed `.xpi` used by the force-install policy when
+        `installExtension` is set. Defaults to the latest GitHub release asset.
+      '';
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -78,5 +111,15 @@ in
     # Make the packaged extension (.xpi + unpacked dir) available in the
     # environment so it's easy to locate for loading into Firefox.
     home.packages = [ ext ];
+
+    # Declaratively install the signed extension. force_installed auto-installs
+    # and enables it on every profile (no doorhanger prompt); updates flow from
+    # the manifest's update_url. HM merges this into Firefox's policies.json.
+    programs.firefox.policies.ExtensionSettings = lib.mkIf cfg.installExtension {
+      ${cfg.extensionId} = {
+        installation_mode = "force_installed";
+        install_url = cfg.extensionUrl;
+      };
+    };
   };
 }

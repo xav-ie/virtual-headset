@@ -2,10 +2,17 @@
 # sources with esbuild and assembles a loadable extension (static assets +
 # compiled JS), provided both as an unpacked directory and a zipped .xpi.
 #
-# The .xpi is unsigned, so installing it permanently requires either Firefox
-# Developer Edition / ESR with `xpinstall.signatures.required = false`, or
-# signing it via `web-ext sign`. For day-to-day use, loading the unpacked
-# directory as a temporary add-on is the simplest path.
+# The .xpi produced here is UNSIGNED — useful for local dev / temporary add-on
+# loads (`about:debugging`) while hacking on the site adapters. The permanent,
+# installable build is signed by Mozilla in CI: the release workflow
+# (../../.github/workflows/release.yml) runs `web-ext sign --channel=unlisted`
+# on a `v*` tag, then publishes the signed .xpi + an `updates.json` to GitHub
+# Releases. Firefox installs that signed build (see the Home-Manager module
+# ../../homeManagerModules/firefox.nix) and auto-updates via the manifest's
+# `update_url`.
+#
+# `version` is read from ../../extension/static/manifest.json so the manifest is
+# the single source of truth (bumped by `just release`).
 #
 # The esbuild flags here mirror ../../extension/build.mjs; keep them in sync.
 {
@@ -19,7 +26,7 @@ let
 in
 stdenvNoCC.mkDerivation {
   pname = "virtual-headset-firefox";
-  version = "0.1.0";
+  version = (lib.importJSON ../../extension/static/manifest.json).version;
 
   src = ../../extension;
 
