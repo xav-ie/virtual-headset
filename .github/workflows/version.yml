@@ -6,14 +6,15 @@ name: Version
 #   * none pending             -> run `npm run tag`, which tags v<version> and
 #     pushes it, triggering release.yml (sign + publish the .xpi).
 #
-# For the tag push to trigger release.yml, checkout must use a PAT with
-# contents:write stored as the RELEASE_PAT secret (tags pushed with the default
-# GITHUB_TOKEN do not trigger other workflows). Without RELEASE_PAT the Version
-# PR still works, but the release tag must be pushed manually (e.g. just release).
+# Auth is a GitHub App installation token (APP_ID / APP_PRIVATE_KEY): the Version
+# PR is opened by the app's bot, and app-token tag pushes still trigger
+# release.yml (the no-trigger restriction only applies to the default
+# GITHUB_TOKEN, not to apps or PATs).
 
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -28,10 +29,16 @@ jobs:
     if: github.repository == 'xav-ie/virtual-headset'
     runs-on: ubuntu-22.04
     steps:
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          token: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - uses: actions/setup-node@v4
         with:
@@ -39,10 +46,16 @@ jobs:
 
       - run: npm ci
 
+      # Author commits as the app's bot so they match the PR author. The bot's
+      # user id (needed for the noreply email) comes from the users API.
       - name: Configure git identity
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          slug="${{ steps.app-token.outputs.app-slug }}"
+          id=$(gh api "/users/${slug}[bot]" --jq .id)
+          git config user.name "${slug}[bot]"
+          git config user.email "${id}+${slug}[bot]@users.noreply.github.com"
 
       - name: Create Version PR or tag a release
         uses: changesets/action@v1
@@ -53,4 +66,4 @@ jobs:
           title: "chore: version packages"
           createGithubReleases: false
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
