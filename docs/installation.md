@@ -37,12 +37,17 @@ Two optional Home Manager modules add desktop integration:
 
   programs.virtual-headset-waybar.enable = true;
   programs.virtual-headset-firefox.enable = true;
+  # Force-install the Mozilla-signed extension from its latest GitHub release
+  # (auto-updates). Requires programs.firefox to manage Firefox. Omit to only
+  # register the native host and load the extension yourself.
+  programs.virtual-headset-firefox.installExtension = true;
 }
 ```
 
 - `homeManagerModules.default` — a Waybar module showing/toggling mute. See
   [Status bar & desktop panel](./status-bar.md).
-- `homeManagerModules.firefox` — registers the browser native-messaging host.
+- `homeManagerModules.firefox` — registers the browser native-messaging host and,
+  with `installExtension = true`, declaratively installs the signed extension.
   See [Browser extension](./browser-extension.md).
 
 ## Building from source

@@ -113,7 +113,12 @@ cargo build --release --manifest-path packages/virtual-headset/Cargo.toml
 extension/static/install-native-host.sh \
   packages/virtual-headset/target/release/virtual-headset-bridge
 
-# 3. Build the extension, then load extension/dist/manifest.json via about:debugging
+# 3a. Install the extension permanently: download virtual_headset.xpi from the
+#     latest GitHub release and open it in Firefox (it's Mozilla-signed).
+#     https://github.com/xav-ie/virtual-headset/releases/latest
+#
+# 3b. ...or build the dev extension and load extension/dist/manifest.json via
+#     about:debugging (temporary; resets on restart):
 cd extension && npm install && npm run build
 ```
 
