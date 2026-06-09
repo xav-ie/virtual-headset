@@ -11,7 +11,7 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # The NixOS VM tests (modules / runtime / extension) boot QEMU, so the
       # runner needs KVM access — and three NixOS closures overflow the default
