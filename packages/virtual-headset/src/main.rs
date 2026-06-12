@@ -63,8 +63,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let source = pipewire::get_source()?;
     println!("✓ Using source: {}\n", source.description);
 
-    // Start pw-loopback to create virtual microphone
+    // Start pw-loopback to create virtual microphone. First sweep any loopback
+    // orphaned by a previous instance that didn't exit gracefully (SIGKILL, or a
+    // SIGTERM before its handler ran), so we never accrete duplicate
+    // Virtual_Headset_Mic sources.
     println!("Starting PipeWire loopback...");
+    pipewire::kill_existing_loopbacks();
     let mut loopback_process = pipewire::start_loopback(&source.name)?;
     println!("✓ Virtual microphone created\n");
 

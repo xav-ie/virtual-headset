@@ -57,6 +57,7 @@ pkgs.symlinkJoin {
         lib.makeBinPath [
           pulseaudio
           pipewire
+          pkgs.procps # pkill, for kill_existing_loopbacks
         ]
       }
     ${lib.optionalString (virtual-headset-ctl != null) ''

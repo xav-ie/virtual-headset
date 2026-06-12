@@ -9,6 +9,11 @@ pub struct AudioSource {
     pub description: String,
 }
 
+/// Node name of the virtual microphone we publish. Doubles as the unique
+/// signature used to find and kill orphaned loopbacks (see
+/// `kill_existing_loopbacks`), so the two always stay in sync.
+const VIRTUAL_MIC_NODE: &str = "Virtual_Headset_Mic";
+
 /// Path to the configured-source file written by `virtual-headset-ctl
 /// set-source`. When present, it names the source to forward instead of the
 /// system default. `$XDG_CONFIG_HOME/virtual-headset/source`, falling back to
@@ -92,17 +97,41 @@ pub fn get_default_source() -> Result<AudioSource, io::Error> {
     })
 }
 
+/// Kill any pre-existing virtual-headset `pw-loopback` instances before we spawn
+/// ours, making every (re)start idempotent: exactly one virtual mic, never an
+/// accreting pile of duplicates.
+///
+/// Why this is needed: the daemon only kills the loopback IT spawned, and only
+/// on a graceful exit (the tail of `main`). A previous instance terminated by
+/// SIGKILL — or by SIGTERM if signal trapping is ever lost — skips that cleanup
+/// and orphans its `pw-loopback` child, which keeps running and re-publishing
+/// `Virtual_Headset_Mic`. Sweeping here heals that on the next start regardless
+/// of how the old instance died.
+///
+/// Matches by our unique playback node name in the command line. `pkill` never
+/// targets its own process, and we always run this *before* spawning, so it can
+/// only ever hit stale instances — not the one we're about to create.
+pub fn kill_existing_loopbacks() {
+    let pattern = format!("node.name={VIRTUAL_MIC_NODE}");
+    let _ = Command::new("pkill").args(["-f", &pattern]).status();
+}
+
 /// Start pw-loopback to create virtual headset that forwards from real mic
 pub fn start_loopback(source_name: &str) -> Result<Child, io::Error> {
     let capture_props = format!(
         "target.object=\"{}\" node.name=loopback_capture",
         source_name
     );
+    let playback_props = format!(
+        "media.class=Audio/Source node.name={VIRTUAL_MIC_NODE} node.description=Virtual_Headset_Microphone"
+    );
 
     Command::new("pw-loopback")
         .args([
-            "--capture-props", &capture_props,
-            "--playback-props", "media.class=Audio/Source node.name=Virtual_Headset_Mic node.description=Virtual_Headset_Microphone",
+            "--capture-props",
+            &capture_props,
+            "--playback-props",
+            &playback_props,
         ])
         .stdin(Stdio::null())
         .spawn()

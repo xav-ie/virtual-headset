@@ -5,7 +5,10 @@ edition = "2024"
 
 [dependencies]
 uhid-virt = "0.0.8"
-ctrlc = "3.4"
+# `termination` traps SIGTERM/SIGHUP (not just SIGINT) so a systemd
+# stop/restart runs the loopback cleanup instead of orphaning the pw-loopback
+# child. SIGKILL still can't be caught — kill_existing_loopbacks covers that.
+ctrlc = { version = "3.4", features = ["termination"] }
 crossterm = "0.28"
 zbus = "4.0"
 crossbeam-channel = "0.5"
