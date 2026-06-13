@@ -44,15 +44,38 @@ impl DeviceState {
     }
 }
 
-/// Apply one mute toggle received over D-Bus: flip the state, pulse the HID mute
-/// button so the host app (Zoom/Meet) sees it, and sync D-Bus listeners.
+/// Apply one mute toggle received over D-Bus: flip the state, gate the audio,
+/// pulse the HID mute button so the host app (Zoom/Meet) sees it, and sync D-Bus
+/// listeners.
+///
+/// The audio relink happens first, before the 50ms HID button pulse, so an
+/// unmute is audible in ~16ms instead of waiting out the pulse — the host
+/// notification is not on the audio path and can lag a few ms. `processing_linked`
+/// tracks the applied link state so we only touch the graph on a real transition.
 fn apply_dbus_toggle(
     state: &mut DeviceState,
     device: &mut UHIDDevice<File>,
     dbus: &Option<DBusService>,
     is_interactive: bool,
+    source_name: &str,
+    processing_linked: &mut bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     state.toggle_mute();
+
+    let want_linked = !state.muted;
+    if *processing_linked != want_linked {
+        *processing_linked = want_linked;
+        pipewire::set_capture_linked(source_name, want_linked);
+        print_msg!(
+            is_interactive,
+            "Audio chain {}",
+            if want_linked {
+                "resumed (unmuted)"
+            } else {
+                "suspended (muted)"
+            }
+        );
+    }
 
     print_msg!(
         is_interactive,
@@ -193,7 +216,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // keyboard poll below sets the cadence, so we just drain non-blocking.
         if !is_interactive {
             match toggle_rx.recv_timeout(std::time::Duration::from_millis(100)) {
-                Ok(()) => apply_dbus_toggle(&mut state, &mut device, &dbus, is_interactive)?,
+                Ok(()) => apply_dbus_toggle(
+                    &mut state,
+                    &mut device,
+                    &dbus,
+                    is_interactive,
+                    &source.name,
+                    &mut processing_linked,
+                )?,
                 Err(crossbeam_channel::RecvTimeoutError::Timeout) => {}
                 // D-Bus unavailable (registration failed): no toggles will ever
                 // arrive, so recv returns instantly — sleep to avoid busy-spin
@@ -205,13 +235,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         // Drain any further queued toggles (and all of them in interactive mode).
         while let Ok(()) = toggle_rx.try_recv() {
-            apply_dbus_toggle(&mut state, &mut device, &dbus, is_interactive)?;
+            apply_dbus_toggle(
+                &mut state,
+                &mut device,
+                &dbus,
+                is_interactive,
+                &source.name,
+                &mut processing_linked,
+            )?;
         }
 
-        // Reconcile the audio graph with the current mute state (cheap; only acts
-        // on a real transition). Placed right after the D-Bus drain so unmutes
-        // from the panel/CLI relink immediately (~16ms resume); keyboard/HID-driven
-        // changes apply on the next loop iteration (≤100ms).
+        // Backstop reconcile for mute changes that don't go through
+        // `apply_dbus_toggle` (keyboard 'm', host-driven HID mute below): the
+        // D-Bus path already relinked above, so this only acts when one of those
+        // paths flipped the state. Cheap; only touches the graph on a transition.
         let want_linked = !state.muted;
         if processing_linked != want_linked {
             processing_linked = want_linked;
