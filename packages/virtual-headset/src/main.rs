@@ -44,28 +44,25 @@ impl DeviceState {
     }
 }
 
-/// Apply one mute toggle received over D-Bus: flip the state, gate the audio,
-/// pulse the HID mute button so the host app (Zoom/Meet) sees it, and sync D-Bus
-/// listeners.
+/// Drive the audio gate toward the state implied by `muted`, retrying until it
+/// sticks.
 ///
-/// The audio relink happens first, before the 50ms HID button pulse, so an
-/// unmute is audible in ~16ms instead of waiting out the pulse — the host
-/// notification is not on the audio path and can lag a few ms. `processing_linked`
-/// tracks the applied link state so we only touch the graph on a real transition.
-fn apply_dbus_toggle(
-    state: &mut DeviceState,
-    device: &mut UHIDDevice<File>,
-    dbus: &Option<DBusService>,
-    is_interactive: bool,
+/// `processing_linked` is the last state we *successfully* applied (`None` until
+/// the first success). We only shell out to pw-link on a real divergence, and
+/// only advance the tracked state when the gate actually ran — so a transient
+/// pw-link/PipeWire failure is retried on the next reconcile rather than being
+/// silently assumed applied.
+fn reconcile_link(
     source_name: &str,
-    processing_linked: &mut bool,
-) -> Result<(), Box<dyn std::error::Error>> {
-    state.toggle_mute();
-
-    let want_linked = !state.muted;
-    if *processing_linked != want_linked {
-        *processing_linked = want_linked;
-        pipewire::set_capture_linked(source_name, want_linked);
+    muted: bool,
+    processing_linked: &mut Option<bool>,
+    is_interactive: bool,
+) {
+    let want_linked = !muted;
+    if *processing_linked != Some(want_linked)
+        && pipewire::set_capture_linked(source_name, want_linked)
+    {
+        *processing_linked = Some(want_linked);
         print_msg!(
             is_interactive,
             "Audio chain {}",
@@ -76,6 +73,26 @@ fn apply_dbus_toggle(
             }
         );
     }
+}
+
+/// Apply one mute toggle received over D-Bus: flip the state, gate the audio,
+/// pulse the HID mute button so the host app (Zoom/Meet) sees it, and sync D-Bus
+/// listeners.
+///
+/// The audio relink happens first, before the 50ms HID button pulse, so an
+/// unmute is audible in ~16ms instead of waiting out the pulse — the host
+/// notification is not on the audio path and can lag a few ms.
+fn apply_dbus_toggle(
+    state: &mut DeviceState,
+    device: &mut UHIDDevice<File>,
+    dbus: &Option<DBusService>,
+    is_interactive: bool,
+    source_name: &str,
+    processing_linked: &mut Option<bool>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    state.toggle_mute();
+
+    reconcile_link(source_name, state.muted, processing_linked, is_interactive);
 
     print_msg!(
         is_interactive,
@@ -188,10 +205,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // the denoised source out of the loopback: the RNNoise filter and raw mic
     // suspend to ~0% while the loopback still feeds silence into
     // Virtual_Headset_Mic (the device stays present for the call app).
-    // `processing_linked` tracks the last state we applied so the main loop only
-    // acts on real mute transitions.
-    let mut processing_linked = !state.muted;
-    pipewire::set_capture_linked(&source.name, processing_linked);
+    //
+    // Wait for wireplumber to create the loopback's auto-link first, so the cut
+    // acts on a real link instead of racing ahead of the async auto-link — which
+    // would leave the chain wired while muted, with no later reconcile to fix it
+    // (the state would already look applied). Bounded so we never hang.
+    for _ in 0..30 {
+        if pipewire::capture_link_exists() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    // Last successfully-applied link state (None until the first success); the
+    // reconcile retries until the gate actually takes.
+    let mut processing_linked: Option<bool> = None;
+    reconcile_link(
+        &source.name,
+        state.muted,
+        &mut processing_linked,
+        is_interactive,
+    );
 
     if is_interactive {
         println!("Controls:");
@@ -243,69 +276,65 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 &source.name,
                 &mut processing_linked,
             )?;
+            // Don't let a burst of queued toggles (each sleeping 50ms in the HID
+            // pulse) delay shutdown.
+            if !running.load(Ordering::SeqCst) {
+                break;
+            }
         }
 
         // Backstop reconcile for mute changes that don't go through
-        // `apply_dbus_toggle` (keyboard 'm', host-driven HID mute below): the
-        // D-Bus path already relinked above, so this only acts when one of those
-        // paths flipped the state. Cheap; only touches the graph on a transition.
-        let want_linked = !state.muted;
-        if processing_linked != want_linked {
-            processing_linked = want_linked;
-            pipewire::set_capture_linked(&source.name, want_linked);
-            print_msg!(
-                is_interactive,
-                "Audio chain {}",
-                if want_linked {
-                    "resumed (unmuted)"
-                } else {
-                    "suspended (muted)"
-                }
-            );
-        }
+        // `apply_dbus_toggle` (keyboard 'm', host-driven HID mute below), and a
+        // retry for any gate that previously failed to apply. The D-Bus path
+        // already relinked above, so this only acts on a real divergence.
+        reconcile_link(
+            &source.name,
+            state.muted,
+            &mut processing_linked,
+            is_interactive,
+        );
 
         // Check for keyboard input (non-blocking with timeout) - only in interactive mode
-        if is_interactive {
-            if event::poll(std::time::Duration::from_millis(100))?
-                && let Event::Key(KeyEvent {
-                    code, modifiers, ..
-                }) = event::read()?
-            {
-                match code {
-                    KeyCode::Char('c') | KeyCode::Char('C')
-                        if modifiers.contains(KeyModifiers::CONTROL) =>
-                    {
-                        running.store(false, Ordering::SeqCst);
-                    }
-                    KeyCode::Char('m') | KeyCode::Char('M') => {
-                        state.toggle_mute();
-
-                        print!("Keyboard toggle, ");
-
-                        // Send HID mute button pulse (0→1→0 toggles mute state)
-                        // Hook bit stays 1 (off-hook) throughout
-                        device.write(&[0x01, 0x03])?; // hook=1, mute=1
-                        std::thread::sleep(std::time::Duration::from_millis(50));
-                        device.write(&[0x01, 0x01])?; // hook=1, mute=0
-
-                        // Update D-Bus and send signal
-                        if let Some(ref dbus) = dbus {
-                            dbus.state().set(state.muted);
-                            if let Err(e) = dbus.notify_mute_changed(state.muted) {
-                                print_msg!(is_interactive, "D-Bus signal error: {}", e);
-                            }
-                        }
-
-                        print!("Mute: {}\r\n", if state.muted { "ON" } else { "OFF" });
-                    }
-                    KeyCode::Char('q') | KeyCode::Char('Q') => {
-                        running.store(false, Ordering::SeqCst);
-                    }
-                    KeyCode::Esc => {
-                        running.store(false, Ordering::SeqCst);
-                    }
-                    _ => {}
+        if is_interactive
+            && event::poll(std::time::Duration::from_millis(100))?
+            && let Event::Key(KeyEvent {
+                code, modifiers, ..
+            }) = event::read()?
+        {
+            match code {
+                KeyCode::Char('c') | KeyCode::Char('C')
+                    if modifiers.contains(KeyModifiers::CONTROL) =>
+                {
+                    running.store(false, Ordering::SeqCst);
                 }
+                KeyCode::Char('m') | KeyCode::Char('M') => {
+                    state.toggle_mute();
+
+                    print!("Keyboard toggle, ");
+
+                    // Send HID mute button pulse (0→1→0 toggles mute state)
+                    // Hook bit stays 1 (off-hook) throughout
+                    device.write(&[0x01, 0x03])?; // hook=1, mute=1
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                    device.write(&[0x01, 0x01])?; // hook=1, mute=0
+
+                    // Update D-Bus and send signal
+                    if let Some(ref dbus) = dbus {
+                        dbus.state().set(state.muted);
+                        if let Err(e) = dbus.notify_mute_changed(state.muted) {
+                            print_msg!(is_interactive, "D-Bus signal error: {}", e);
+                        }
+                    }
+
+                    print!("Mute: {}\r\n", if state.muted { "ON" } else { "OFF" });
+                }
+                KeyCode::Char('q') | KeyCode::Char('Q') => {
+                    running.store(false, Ordering::SeqCst);
+                }
+                KeyCode::Esc => {
+                    running.store(false, Ordering::SeqCst);
+                }
+                _ => {}
             }
         }
 

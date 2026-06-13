@@ -161,16 +161,51 @@ pub fn start_loopback(source_name: &str) -> Result<Child, io::Error> {
 /// denoiser.
 ///
 /// Uses pw-link's node-name form so it covers every channel regardless of
-/// mono/stereo. A redundant connect ("File exists") or disconnect (nothing to
-/// cut) is harmless, so we ignore the exit status and silence stderr.
-pub fn set_capture_linked(source_name: &str, linked: bool) {
+/// mono/stereo.
+///
+/// Returns whether the gate actually ran. pw-link exits non-zero for benign
+/// idempotent cases (connect when already linked → "File exists"; disconnect
+/// when there's nothing to cut), so a non-zero exit still counts as applied —
+/// only a spawn failure (pw-link missing from PATH, or PipeWire unreachable)
+/// returns `false`, letting the caller keep its tracked state unchanged and
+/// retry on the next reconcile instead of silently assuming success.
+#[must_use]
+pub fn set_capture_linked(source_name: &str, linked: bool) -> bool {
     let mut cmd = Command::new("pw-link");
     if !linked {
         cmd.arg("-d");
     }
-    let _ = cmd
-        .arg(source_name)
+    cmd.arg(source_name)
         .arg(LOOPBACK_CAPTURE_NODE)
         .stderr(Stdio::null())
-        .status();
+        .status()
+        .is_ok()
+}
+
+/// Whether the loopback capture currently has an inbound link (the source is
+/// wired into it). Used at startup to wait for wireplumber's async auto-link
+/// before asserting the muted-by-default cut — otherwise the cut could race
+/// ahead of the auto-link and leave the chain wired while muted.
+#[must_use]
+pub fn capture_link_exists() -> bool {
+    let Ok(output) = Command::new("pw-link").arg("-l").output() else {
+        return false;
+    };
+    if !output.status.success() {
+        return false;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let lines: Vec<&str> = stdout.lines().collect();
+    let header = format!("{LOOPBACK_CAPTURE_NODE}:");
+    // The capture node's input port shows as a non-indented header line
+    // "loopback_capture:input_<ch>"; an inbound link appears on the next line as
+    // "  |<- <source>:<port>".
+    lines.iter().enumerate().any(|(i, line)| {
+        let t = line.trim_start();
+        t.starts_with(&header)
+            && !t.starts_with('|')
+            && lines
+                .get(i + 1)
+                .is_some_and(|n| n.trim_start().starts_with("|<-"))
+    })
 }
