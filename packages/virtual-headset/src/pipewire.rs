@@ -14,6 +14,12 @@ pub struct AudioSource {
 /// `kill_existing_loopbacks`), so the two always stay in sync.
 const VIRTUAL_MIC_NODE: &str = "Virtual_Headset_Mic";
 
+/// Node name of the loopback's capture side — the input that pulls from the
+/// (denoised) source. `set_capture_linked` links/unlinks this on (un)mute to
+/// gate the RNNoise chain, so it must match the `node.name` set in
+/// `start_loopback`.
+const LOOPBACK_CAPTURE_NODE: &str = "loopback_capture";
+
 /// Path to the configured-source file written by `virtual-headset-ctl
 /// set-source`. When present, it names the source to forward instead of the
 /// system default. `$XDG_CONFIG_HOME/virtual-headset/source`, falling back to
@@ -127,8 +133,7 @@ pub fn kill_existing_loopbacks() {
 /// hot even while idle/muted.
 pub fn start_loopback(source_name: &str) -> Result<Child, io::Error> {
     let capture_props = format!(
-        "target.object=\"{}\" node.name=loopback_capture node.passive=true",
-        source_name
+        "target.object=\"{source_name}\" node.name={LOOPBACK_CAPTURE_NODE} node.passive=true"
     );
     let playback_props = format!(
         "media.class=Audio/Source node.name={VIRTUAL_MIC_NODE} node.description=Virtual_Headset_Microphone"
@@ -143,4 +148,29 @@ pub fn start_loopback(source_name: &str) -> Result<Child, io::Error> {
         ])
         .stdin(Stdio::null())
         .spawn()
+}
+
+/// Link or unlink the (denoised) source into the loopback capture — how mute
+/// gates CPU.
+///
+/// While muted we cut the link: the RNNoise filter and the raw mic lose their
+/// only consumer and suspend to ~0%, while the loopback keeps feeding silence
+/// into `Virtual_Headset_Mic`, so the device stays present for the call app and
+/// unmuting relinks in ~16ms (the mic resumes from idle/suspend, fast enough to
+/// be inaudible). While unmuted we (re)connect it so audio flows through the
+/// denoiser.
+///
+/// Uses pw-link's node-name form so it covers every channel regardless of
+/// mono/stereo. A redundant connect ("File exists") or disconnect (nothing to
+/// cut) is harmless, so we ignore the exit status and silence stderr.
+pub fn set_capture_linked(source_name: &str, linked: bool) {
+    let mut cmd = Command::new("pw-link");
+    if !linked {
+        cmd.arg("-d");
+    }
+    let _ = cmd
+        .arg(source_name)
+        .arg(LOOPBACK_CAPTURE_NODE)
+        .stderr(Stdio::null())
+        .status();
 }

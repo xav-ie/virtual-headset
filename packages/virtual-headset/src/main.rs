@@ -125,6 +125,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    // Reflect the initial mute state onto the audio graph. We start muted, so cut
+    // the denoised source out of the loopback: the RNNoise filter and raw mic
+    // suspend to ~0% while the loopback still feeds silence into
+    // Virtual_Headset_Mic (the device stays present for the call app).
+    // `processing_linked` tracks the last state we applied so the main loop only
+    // acts on real mute transitions.
+    let mut processing_linked = !state.muted;
+    pipewire::set_capture_linked(&source.name, processing_linked);
+
     if is_interactive {
         println!("Controls:");
         println!("  m      - Toggle mute");
@@ -176,6 +185,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if state.muted { "ON" } else { "OFF" }
                 );
             }
+        }
+
+        // Reconcile the audio graph with the current mute state (cheap; only acts
+        // on a real transition). Placed right after the D-Bus drain so unmutes
+        // from the panel/CLI relink immediately (~16ms resume); keyboard/HID-driven
+        // changes apply on the next loop iteration (≤100ms).
+        let want_linked = !state.muted;
+        if processing_linked != want_linked {
+            processing_linked = want_linked;
+            pipewire::set_capture_linked(&source.name, want_linked);
+            print_msg!(
+                is_interactive,
+                "Audio chain {}",
+                if want_linked {
+                    "resumed (unmuted)"
+                } else {
+                    "suspended (muted)"
+                }
+            );
         }
 
         // Check for keyboard input (non-blocking with timeout) - only in interactive mode
