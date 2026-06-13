@@ -14,6 +14,12 @@ pub struct AudioSource {
 /// `kill_existing_loopbacks`), so the two always stay in sync.
 const VIRTUAL_MIC_NODE: &str = "Virtual_Headset_Mic";
 
+/// Node name of the loopback's capture side — the input that pulls from the
+/// (denoised) source. `set_capture_linked` links/unlinks this on (un)mute to
+/// gate the RNNoise chain, so it must match the `node.name` set in
+/// `start_loopback`.
+const LOOPBACK_CAPTURE_NODE: &str = "loopback_capture";
+
 /// Path to the configured-source file written by `virtual-headset-ctl
 /// set-source`. When present, it names the source to forward instead of the
 /// system default. `$XDG_CONFIG_HOME/virtual-headset/source`, falling back to
@@ -116,11 +122,18 @@ pub fn kill_existing_loopbacks() {
     let _ = Command::new("pkill").args(["-f", &pattern]).status();
 }
 
-/// Start pw-loopback to create virtual headset that forwards from real mic
+/// Start pw-loopback to create virtual headset that forwards from real mic.
+///
+/// The capture side is marked `node.passive=true` so it never *drives* the
+/// graph on its own: the loopback (and everything upstream it pulls from — the
+/// NoiseTorch RNNoise filter and the raw mic) only runs when a real client is
+/// capturing `Virtual_Headset_Mic`. With no consumer, PipeWire suspends the
+/// whole chain to ~0% CPU; it wakes instantly when an app (Zoom/Meet) opens the
+/// virtual mic. Without this, the loopback pulls 24/7 and pins the denoiser
+/// hot even while idle/muted.
 pub fn start_loopback(source_name: &str) -> Result<Child, io::Error> {
     let capture_props = format!(
-        "target.object=\"{}\" node.name=loopback_capture",
-        source_name
+        "target.object=\"{source_name}\" node.name={LOOPBACK_CAPTURE_NODE} node.passive=true"
     );
     let playback_props = format!(
         "media.class=Audio/Source node.name={VIRTUAL_MIC_NODE} node.description=Virtual_Headset_Microphone"
@@ -135,4 +148,64 @@ pub fn start_loopback(source_name: &str) -> Result<Child, io::Error> {
         ])
         .stdin(Stdio::null())
         .spawn()
+}
+
+/// Link or unlink the (denoised) source into the loopback capture — how mute
+/// gates CPU.
+///
+/// While muted we cut the link: the RNNoise filter and the raw mic lose their
+/// only consumer and suspend to ~0%, while the loopback keeps feeding silence
+/// into `Virtual_Headset_Mic`, so the device stays present for the call app and
+/// unmuting relinks in ~16ms (the mic resumes from idle/suspend, fast enough to
+/// be inaudible). While unmuted we (re)connect it so audio flows through the
+/// denoiser.
+///
+/// Uses pw-link's node-name form so it covers every channel regardless of
+/// mono/stereo.
+///
+/// Returns whether the gate actually ran. pw-link exits non-zero for benign
+/// idempotent cases (connect when already linked → "File exists"; disconnect
+/// when there's nothing to cut), so a non-zero exit still counts as applied —
+/// only a spawn failure (pw-link missing from PATH, or PipeWire unreachable)
+/// returns `false`, letting the caller keep its tracked state unchanged and
+/// retry on the next reconcile instead of silently assuming success.
+#[must_use]
+pub fn set_capture_linked(source_name: &str, linked: bool) -> bool {
+    let mut cmd = Command::new("pw-link");
+    if !linked {
+        cmd.arg("-d");
+    }
+    cmd.arg(source_name)
+        .arg(LOOPBACK_CAPTURE_NODE)
+        .stderr(Stdio::null())
+        .status()
+        .is_ok()
+}
+
+/// Whether the loopback capture currently has an inbound link (the source is
+/// wired into it). Used at startup to wait for wireplumber's async auto-link
+/// before asserting the muted-by-default cut — otherwise the cut could race
+/// ahead of the auto-link and leave the chain wired while muted.
+#[must_use]
+pub fn capture_link_exists() -> bool {
+    let Ok(output) = Command::new("pw-link").arg("-l").output() else {
+        return false;
+    };
+    if !output.status.success() {
+        return false;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let lines: Vec<&str> = stdout.lines().collect();
+    let header = format!("{LOOPBACK_CAPTURE_NODE}:");
+    // The capture node's input port shows as a non-indented header line
+    // "loopback_capture:input_<ch>"; an inbound link appears on the next line as
+    // "  |<- <source>:<port>".
+    lines.iter().enumerate().any(|(i, line)| {
+        let t = line.trim_start();
+        t.starts_with(&header)
+            && !t.starts_with('|')
+            && lines
+                .get(i + 1)
+                .is_some_and(|n| n.trim_start().starts_with("|<-"))
+    })
 }
