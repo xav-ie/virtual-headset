@@ -44,6 +44,42 @@ impl DeviceState {
     }
 }
 
+/// Apply one mute toggle received over D-Bus: flip the state, pulse the HID mute
+/// button so the host app (Zoom/Meet) sees it, and sync D-Bus listeners.
+fn apply_dbus_toggle(
+    state: &mut DeviceState,
+    device: &mut UHIDDevice<File>,
+    dbus: &Option<DBusService>,
+    is_interactive: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    state.toggle_mute();
+
+    print_msg!(
+        is_interactive,
+        "D-Bus toggle received, muting: {}",
+        state.muted
+    );
+
+    // Send HID mute button pulse (0→1→0 toggles mute state); hook bit stays 1.
+    device.write(&[0x01, 0x03])?; // hook=1, mute=1
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    device.write(&[0x01, 0x01])?; // hook=1, mute=0
+
+    if let Some(dbus) = dbus {
+        dbus.state().set(state.muted);
+        if let Err(e) = dbus.notify_mute_changed(state.muted) {
+            print_msg!(is_interactive, "D-Bus signal error: {}", e);
+        }
+    }
+
+    print_msg!(
+        is_interactive,
+        "Mute state updated to: {}",
+        if state.muted { "ON" } else { "OFF" }
+    );
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Set up Ctrl+C handler
     let running = Arc::new(AtomicBool::new(true));
@@ -148,43 +184,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Main event loop
     while running.load(Ordering::SeqCst) {
-        // Check for D-Bus toggle commands (non-blocking) - do this FIRST before anything else
-        while let Ok(()) = toggle_rx.try_recv() {
-            state.toggle_mute();
-
-            if is_interactive {
-                print!("D-Bus toggle received, ");
-            } else {
-                print_msg!(
-                    is_interactive,
-                    "D-Bus toggle received, muting: {}",
-                    state.muted
-                );
-            }
-
-            // Send HID mute button pulse (0→1→0 toggles mute state)
-            // Hook bit stays 1 (off-hook) throughout
-            device.write(&[0x01, 0x03])?; // hook=1, mute=1
-            std::thread::sleep(std::time::Duration::from_millis(50));
-            device.write(&[0x01, 0x01])?; // hook=1, mute=0
-
-            // Update D-Bus and send signal
-            if let Some(ref dbus) = dbus {
-                dbus.state().set(state.muted);
-                if let Err(e) = dbus.notify_mute_changed(state.muted) {
-                    print_msg!(is_interactive, "D-Bus signal error: {}", e);
+        // Wait for the next D-Bus toggle. In daemon mode we BLOCK on the channel
+        // (with a 100ms cap so HID events still get serviced) instead of
+        // busy-polling + sleeping — so an unmute from the panel/CLI wakes us
+        // instantly (~16ms resume) rather than waiting out a poll interval. The
+        // channel is the portable seam: any platform IPC feeds it, and this loop
+        // never has to know about D-Bus specifically. In interactive mode the
+        // keyboard poll below sets the cadence, so we just drain non-blocking.
+        if !is_interactive {
+            match toggle_rx.recv_timeout(std::time::Duration::from_millis(100)) {
+                Ok(()) => apply_dbus_toggle(&mut state, &mut device, &dbus, is_interactive)?,
+                Err(crossbeam_channel::RecvTimeoutError::Timeout) => {}
+                // D-Bus unavailable (registration failed): no toggles will ever
+                // arrive, so recv returns instantly — sleep to avoid busy-spin
+                // while HID-driven mute still works via device.read() below.
+                Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
+                    std::thread::sleep(std::time::Duration::from_millis(100));
                 }
             }
-
-            if is_interactive {
-                print!("Mute: {}\r\n", if state.muted { "ON" } else { "OFF" });
-            } else {
-                print_msg!(
-                    is_interactive,
-                    "Mute state updated to: {}",
-                    if state.muted { "ON" } else { "OFF" }
-                );
-            }
+        }
+        // Drain any further queued toggles (and all of them in interactive mode).
+        while let Ok(()) = toggle_rx.try_recv() {
+            apply_dbus_toggle(&mut state, &mut device, &dbus, is_interactive)?;
         }
 
         // Reconcile the audio graph with the current mute state (cheap; only acts
@@ -249,9 +270,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     _ => {}
                 }
             }
-        } else {
-            // In daemon mode, just sleep a bit to avoid busy-waiting
-            std::thread::sleep(std::time::Duration::from_millis(100));
         }
 
         // Try to read events from device (LED feedback from host)
