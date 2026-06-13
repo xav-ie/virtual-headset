@@ -116,10 +116,18 @@ pub fn kill_existing_loopbacks() {
     let _ = Command::new("pkill").args(["-f", &pattern]).status();
 }
 
-/// Start pw-loopback to create virtual headset that forwards from real mic
+/// Start pw-loopback to create virtual headset that forwards from real mic.
+///
+/// The capture side is marked `node.passive=true` so it never *drives* the
+/// graph on its own: the loopback (and everything upstream it pulls from — the
+/// NoiseTorch RNNoise filter and the raw mic) only runs when a real client is
+/// capturing `Virtual_Headset_Mic`. With no consumer, PipeWire suspends the
+/// whole chain to ~0% CPU; it wakes instantly when an app (Zoom/Meet) opens the
+/// virtual mic. Without this, the loopback pulls 24/7 and pins the denoiser
+/// hot even while idle/muted.
 pub fn start_loopback(source_name: &str) -> Result<Child, io::Error> {
     let capture_props = format!(
-        "target.object=\"{}\" node.name=loopback_capture",
+        "target.object=\"{}\" node.name=loopback_capture node.passive=true",
         source_name
     );
     let playback_props = format!(
