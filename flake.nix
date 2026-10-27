@@ -163,6 +163,15 @@
             imports = [ ./nixosModules/default.nix ];
           };
 
+        darwinModules.default =
+          {
+            config,
+            lib,
+            pkgs,
+            ...
+          }@args:
+          import ./darwinModules/default.nix (args // { self = inputs.self; });
+
         # Pass `self` by closure rather than `_module.args.self` so importing
         # several of these modules together doesn't collide on that arg.
         homeManagerModules.default =
