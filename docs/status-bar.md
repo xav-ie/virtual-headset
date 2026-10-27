@@ -1,60 +1,56 @@
-# Status bar & desktop panel
+# Status bars and the panel (Linux)
 
-- [Waybar](#waybar) (Home Manager module)
-- [Desktop panel](#desktop-panel) (AGS)
-- [Other status bars](#other-status-bars) (i3, Polybar, …)
+Every indicator reads the same `MuteChanged` signal and acts through
+`virtual-headset-ctl`, so they agree with each other, your keys, the browser and
+the call app. On macOS, see [your menu bar](macos.md#your-menu-bar) instead.
 
-All of these read the same `MuteChanged` D-Bus signal for live updates and use
-`virtual-headset-ctl` for actions, so they stay in sync with the keyboard and the
-browser extension.
+- [Waybar](#waybar)
+- [Desktop panel](#desktop-panel)
+- [Other status bars](#other-status-bars)
 
 ## Waybar
 
-The `homeManagerModules.default` module adds a Waybar module that shows the mute
-state, updates instantly via D-Bus, toggles on click, and restarts the service on
-right-click:
+The Home Manager module adds an indicator that updates the moment mute changes,
+toggles on click, and restarts the service on right-click:
 
 ```nix
 {
-  imports = [ virtual-headset.homeManagerModules.default ];
+  imports = [ inputs.virtual-headset.homeManagerModules.default ];
 
   programs.virtual-headset-waybar = {
     enable = true;
-    mutedIcon = " ";   # Nerd Font icons; use anything you like
+    mutedIcon = " "; # any text or Nerd Font icon
     unmutedIcon = " ";
   };
 
-  # add the module to your bar
-  programs.waybar.settings.mainBar.modules-right = [
-    "custom/virtual-headset"
-  ];
+  programs.waybar.settings.mainBar.modules-right = [ "custom/virtual-headset" ];
 }
 ```
 
-See [homeManagerModules/default.nix](../homeManagerModules/default.nix) for
-styling and all options.
+Styling and the other options are in
+[homeManagerModules/default.nix](../homeManagerModules/default.nix).
 
 ## Desktop panel
 
-`virtual-headset-panel` is a standalone [Astal/AGS](https://github.com/aylur/ags)
-panel that mirrors the browser extension: a live mute toggle and an audio-source
-picker, themed to your desktop.
+`virtual-headset-panel` is a small [AGS](https://github.com/aylur/ags) panel with
+the mute toggle and a picker for which mic to forward, in your desktop's theme:
 
-```bash
-nix run .#virtual-headset-panel            # show it
-nix run .#virtual-headset-panel -- toggle  # show/hide a running instance
+```sh
+nix run .#virtual-headset-panel             # show it
+nix run .#virtual-headset-panel -- toggle   # show or hide a running one
 ```
 
-Bind `virtual-headset-panel toggle` to a key, or wire it to a status-bar click,
-to pop it open. Picking a different source restarts the daemon (the mic blips for
-about a second), so it's a between-calls action.
+Bind `virtual-headset-panel toggle` to a key or a status bar click. Picking
+another mic restarts the service, so the mic drops for about a second: do it
+between calls.
 
 ## Other status bars
 
-Any bar that can run a shell command works. Query state over D-Bus and toggle
-with `virtual-headset-ctl`.
+Anything that runs a command works. For live updates instead of polling, read
+`virtual-headset-ctl monitor-mute`, which prints a line of JSON on every change;
+that's what the Waybar module does.
 
-**i3status / i3blocks**
+**i3blocks**
 
 ```ini
 [virtual-headset]
@@ -72,6 +68,3 @@ exec = dbus-send --session --print-reply --dest=com.github.virtual_headset /com/
 interval = 1
 click-left = virtual-headset-ctl toggle-mute
 ```
-
-For event-driven updates instead of polling, consume
-`virtual-headset-ctl monitor-mute` (JSON) — that's what the Waybar module does.

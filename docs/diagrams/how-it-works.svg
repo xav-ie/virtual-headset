@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1062 360" width="1062" height="360" role="img"><style>
+  text { font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; fill: #1d2129; }
+  .bg { fill: #f5f6f9; }
+  .box { fill: #ffffff; stroke: #d6dae3; stroke-width: 2; }
+  .key { fill: #e0245e; fill-opacity: .1; stroke: #e0245e; stroke-width: 2.5; }
+  .end { fill: #4d5566; fill-opacity: .14; stroke: #4d5566; stroke-width: 2; }
+  .group { fill: none; stroke: #5d6576; stroke-width: 1.5; stroke-dasharray: 6 5; }
+  .title { font-size: 16px; font-weight: 650; }
+  .sub { font-size: 13.5px; fill: #5d6576; }
+  .label { font-size: 13px; font-weight: 550; fill: #4d5566; }
+  .axis { font-size: 12.5px; fill: #5d6576; }
+  .edge { fill: none; stroke: #4d5566; stroke-width: 2; marker-end: url(#arrow); }
+  .tick { stroke: #5d6576; stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .tag { fill: #f5f6f9; }
+  .head { fill: #4d5566; }
+  .seg-quiet { fill: #ffffff; stroke: #d6dae3; stroke-width: 1.5; }
+  .seg-live { fill: #e0245e; fill-opacity: .2; stroke: #e0245e; stroke-width: 1.5; }
+  .seg-ok { fill: #23864f; fill-opacity: .2; stroke: #23864f; stroke-width: 1.5; }
+  .seg-mono { fill: #4d5566; fill-opacity: .16; stroke: #4d5566; stroke-width: 1.5; }
+</style><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="head" d="M0 0L10 5L0 10z"/></marker></defs><rect class="bg" width="1062" height="360"/><rect class="group" x="287" y="20" width="488" height="334" rx="16"/><text class="title" x="303" y="44">Virtual Headset</text><rect class="box" x="24" y="64" width="171" height="104" rx="14"/><text class="title" x="109.5" y="103" text-anchor="middle">Your mic</text><text class="sub" x="109.5" y="122.1" text-anchor="middle">built-in, USB or</text><text class="sub" x="109.5" y="140.3" text-anchor="middle">Bluetooth</text><rect class="box" x="24" y="232" width="171" height="104" rx="14"/><text class="title" x="109.5" y="261.9" text-anchor="middle">You</text><text class="sub" x="109.5" y="281" text-anchor="middle">a key, your status</text><text class="sub" x="109.5" y="299.2" text-anchor="middle">bar, the panel or</text><text class="sub" x="109.5" y="317.4" text-anchor="middle">the browser</text><rect class="key" x="305" y="64" width="452" height="104" rx="14"/><text class="title" x="531" y="112.1" text-anchor="middle">Virtual_Headset_Microphone</text><text class="sub" x="531" y="131.2" text-anchor="middle">your mic, optionally with background noise removed</text><rect class="key" x="305" y="232" width="452" height="104" rx="14"/><text class="title" x="531" y="280.1" text-anchor="middle">Virtual_Headset</text><text class="sub" x="531" y="299.2" text-anchor="middle">a USB telephony headset, as far as the call app can tell</text><rect class="end" x="867" y="64" width="171" height="272" rx="14"/><text class="title" x="952.5" y="168.8" text-anchor="middle">Zoom or Meet</text><text class="sub" x="952.5" y="187.9" text-anchor="middle">web or desktop; its</text><text class="sub" x="952.5" y="206.1" text-anchor="middle">own mute button</text><text class="sub" x="952.5" y="224.3" text-anchor="middle">stays in sync with</text><text class="sub" x="952.5" y="242.5" text-anchor="middle">yours</text><path class="edge" d="M195 116L305 116"/><path class="edge" d="M195 284L305 284"/><rect class="tag" x="230" y="259" width="40.1" height="19" rx="5"/><text class="label" x="250" y="273" text-anchor="middle">mute</text><path class="edge" d="M757 116L867 116"/><rect class="tag" x="770.9" y="91" width="82.2" height="19" rx="5"/><text class="label" x="812" y="105" text-anchor="middle">your voice</text><path class="edge" d="M757 274L867 274"/><rect class="tag" x="763.9" y="249" width="96.2" height="19" rx="5"/><text class="label" x="812" y="263" text-anchor="middle">button press</text><path class="edge" d="M867 294L757 294"/><rect class="tag" x="770.9" y="297" width="82.2" height="19" rx="5"/><text class="label" x="812" y="311" text-anchor="middle">mute light</text></svg>

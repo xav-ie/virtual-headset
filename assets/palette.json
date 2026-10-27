@@ -1,0 +1,22 @@
+{
+  "dark": {
+    "bg": "#1c1f26",
+    "surface": "#262a33",
+    "line": "#3b414e",
+    "border": "#a3abbd",
+    "text": "#eef0f4",
+    "muted": "#a7aebd",
+    "live": "#ff4d7d",
+    "ok": "#5ad18a"
+  },
+  "light": {
+    "bg": "#f5f6f9",
+    "surface": "#ffffff",
+    "line": "#d6dae3",
+    "border": "#4d5566",
+    "text": "#1d2129",
+    "muted": "#5d6576",
+    "live": "#e0245e",
+    "ok": "#23864f"
+  }
+}

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1062 312" width="1062" height="312" role="img"><style>
+  text { font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; fill: #1d2129; }
+  .bg { fill: #f5f6f9; }
+  .box { fill: #ffffff; stroke: #d6dae3; stroke-width: 2; }
+  .key { fill: #e0245e; fill-opacity: .1; stroke: #e0245e; stroke-width: 2.5; }
+  .end { fill: #4d5566; fill-opacity: .14; stroke: #4d5566; stroke-width: 2; }
+  .group { fill: none; stroke: #5d6576; stroke-width: 1.5; stroke-dasharray: 6 5; }
+  .title { font-size: 16px; font-weight: 650; }
+  .sub { font-size: 13.5px; fill: #5d6576; }
+  .label { font-size: 13px; font-weight: 550; fill: #4d5566; }
+  .axis { font-size: 12.5px; fill: #5d6576; }
+  .edge { fill: none; stroke: #4d5566; stroke-width: 2; marker-end: url(#arrow); }
+  .tick { stroke: #5d6576; stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .tag { fill: #f5f6f9; }
+  .head { fill: #4d5566; }
+  .seg-quiet { fill: #ffffff; stroke: #d6dae3; stroke-width: 1.5; }
+  .seg-live { fill: #e0245e; fill-opacity: .2; stroke: #e0245e; stroke-width: 1.5; }
+  .seg-ok { fill: #23864f; fill-opacity: .2; stroke: #23864f; stroke-width: 1.5; }
+  .seg-mono { fill: #4d5566; fill-opacity: .16; stroke: #4d5566; stroke-width: 1.5; }
+</style><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="head" d="M0 0L10 5L0 10z"/></marker></defs><rect class="bg" width="1062" height="312"/><rect class="box" x="24" y="24" width="258" height="96" rx="14"/><text class="title" x="153" y="68.1" text-anchor="middle">virtual-headset-ctl</text><text class="sub" x="153" y="87.2" text-anchor="middle">mute, unmute, toggle-mute</text><rect class="key" x="402" y="24" width="258" height="96" rx="14"/><text class="title" x="531" y="68.1" text-anchor="middle">Virtual_Headset</text><text class="sub" x="531" y="87.2" text-anchor="middle">/dev/hidraw*</text><rect class="key" x="780" y="24" width="258" height="96" rx="14"/><text class="title" x="909" y="68.1" text-anchor="middle">virtual-headset</text><text class="sub" x="909" y="87.2" text-anchor="middle">the daemon</text><rect class="box" x="780" y="192" width="258" height="96" rx="14"/><text class="title" x="909" y="236.1" text-anchor="middle">D-Bus</text><text class="sub" x="909" y="255.2" text-anchor="middle">MuteChanged(bool)</text><rect class="end" x="24" y="192" width="636" height="96" rx="14"/><text class="title" x="342" y="236.1" text-anchor="middle">Everything that shows mute</text><text class="sub" x="342" y="255.2" text-anchor="middle">Waybar, i3, Polybar, the panel and the Firefox bridge</text><path class="edge" d="M282 72L402 72"/><rect class="tag" x="307.9" y="47" width="68.2" height="19" rx="5"/><text class="label" x="342" y="61" text-anchor="middle">report 3</text><path class="edge" d="M660 72L780 72"/><path class="edge" d="M909 120L909 192"/><rect class="tag" x="917" y="144" width="89.2" height="19" rx="5"/><text class="label" x="961.6" y="158" text-anchor="middle">MuteChanged</text><path class="edge" d="M780 240L660 240"/></svg>

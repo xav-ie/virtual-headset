@@ -597,7 +597,11 @@ final class Post {
 }
 
 final class Controller: NSObject, NSSoundDelegate {
-  let defaults = UserDefaults.standard
+  let defaults: UserDefaults
+  // A screenshot controller only draws the panel: no devices, audio or listeners.
+  let live: Bool
+  // Overrides the meter for screenshots, where no mic is open.
+  var shownLevel: Double?
   // Noise suppression on top of forwarding; off passes the mic through untouched.
   // Kept under the "enabled" key so existing settings carry over.
   var denoise: Bool {
@@ -671,10 +675,13 @@ final class Controller: NSObject, NSSoundDelegate {
   var clickMonitor: Any?
   var lastMonitorClose: Date?
 
-  override init() {
+  init(live: Bool = true) {
+    self.live = live
+    // Screenshots keep their settings in a throwaway domain, never the user's.
+    defaults = live ? .standard : UserDefaults(suiteName: "com.github.virtual-headset.screenshot")!
     super.init()
     // Settings saved under the agent's previous bundle id carry over once.
-    if defaults.object(forKey: "migrated") == nil,
+    if live, defaults.object(forKey: "migrated") == nil,
       let old = UserDefaults(suiteName: "com.x.mic-denoise")
     {
       for k in ["enabled", "input", "auto", "model", "mix", "gate"] {
@@ -687,6 +694,7 @@ final class Controller: NSObject, NSSoundDelegate {
     panel.hidesOnDeactivate = false
     panel.backgroundColor = .clear
     panel.isOpaque = false
+    guard live else { return }
 
     DistributedNotificationCenter.default().addObserver(forName: TOGGLE, object: nil, queue: .main)
     {
@@ -1086,7 +1094,7 @@ final class Controller: NSObject, NSSoundDelegate {
       separator(),
       heading("Microphone"),
       // The meter only means something while the mic is open.
-      grid([("Input", micPop)] + (capture != nil ? [("Level", meterRow())] : []) + [("", autoBox)]),
+      grid([("Input", micPop)] + (capture != nil || shownLevel != nil ? [("Level", meterRow())] : []) + [("", autoBox)]),
       wrapping(status),
       separator(),
       NSStackView(views: [heading("Noise suppression"), NSView(), toggle]),
@@ -1200,7 +1208,7 @@ final class Controller: NSObject, NSSoundDelegate {
   // off, warning == critical: a warning above critical would invert the colours.
   var meterWarning: Double { gate > GATE_OFF ? gate : -3 }
   func updateMeter() {
-    let v = capture == nil ? -Double.infinity : level
+    let v = shownLevel ?? (capture == nil ? -Double.infinity : level)
     meter.doubleValue = max(GATE_OFF, v)
     meterText.stringValue = v.isFinite ? "\(Int(v.rounded())) dB" : "—"
   }
@@ -1359,9 +1367,42 @@ final class Controller: NSObject, NSSoundDelegate {
   }
 }
 
+// `virtual-headset screenshot <dir>`: the real panel in each state the docs show,
+// with sample values, as <dir>/<state>.png (scripts/screenshots.mjs). screencapture
+// only captures windows on screen, so each state flashes in the screen's corner.
+func screenshots(to dir: String) {
+  let c = Controller(live: false)
+  c.defaults.removePersistentDomain(forName: "com.github.virtual-headset.screenshot")
+  c.panel.appearance = NSAppearance(named: .darkAqua)
+  for (name, call, denoise, status, level) in [
+    ("live", "unmuted", true, "Using AirPods Pro", -24.0),
+    ("muted", "muted", true, "Mic released while the call is muted", nil),
+    ("no-call", "none", false, "Standby — opens when an app uses it", nil),
+  ] {
+    c.call = call
+    c.denoise = denoise
+    c.status = status
+    c.shownLevel = level
+    c.buildContent()
+    c.panel.setFrameOrigin(NSPoint(x: 20, y: 60))
+    c.panel.orderFrontRegardless()
+    RunLoop.main.run(until: Date().addingTimeInterval(0.6))
+    let p = Process()
+    p.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+    p.arguments = ["-x", "-o", "-l", "\(c.panel.windowNumber)", "\(dir)/\(name).png"]
+    try? p.run()
+    p.waitUntilExit()
+    c.panel.orderOut(nil)
+  }
+}
+
 signal(SIGPIPE, SIG_IGN)  // a dead ffmpeg must not kill us mid-write
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
+if CommandLine.arguments.dropFirst().first == "screenshot" {
+  screenshots(to: CommandLine.arguments.dropFirst(2).first ?? ".")
+  exit(0)
+}
 let controller = Controller()
 signal(SIGTERM) { _ in
   controller.stop()

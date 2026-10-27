@@ -82,9 +82,10 @@
                 ++ [ config.treefmt.build.wrapper ]
                 ++ (with pkgs; [
                   cargo
-                  rustc
-                  rust-analyzer
                   clippy
+                  nodejs # scripts/diagrams.mjs, scripts/screenshots.mjs
+                  rust-analyzer
+                  rustc
                   rustfmt
                 ]);
 
@@ -122,6 +123,29 @@
           };
 
           checks = {
+            # The docs' diagrams and their blocks are exactly what scripts/diagrams.mjs writes.
+            docs =
+              pkgs.runCommand "virtual-headset-docs"
+                {
+                  nativeBuildInputs = [ pkgs.nodejs ];
+                  src = lib.fileset.toSource {
+                    root = ./.;
+                    fileset = lib.fileset.unions [
+                      ./README.md
+                      ./assets/palette.json
+                      ./docs
+                      ./scripts/diagrams.mjs
+                    ];
+                  };
+                }
+                ''
+                  cp -r --no-preserve=mode $src work
+                  node work/scripts/diagrams.mjs
+                  diff -r $src/docs work/docs
+                  diff $src/README.md work/README.md
+                  touch $out
+                '';
+
             # Ensure all packages build successfully
             all-packages = pkgs.symlinkJoin {
               name = "virtual-headset-all";
