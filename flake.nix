@@ -4,7 +4,7 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
     flake-parts.url = "github:hercules-ci/flake-parts";
-    systems.url = "github:nix-systems/default-linux";
+    systems.url = "github:nix-systems/default";
     treefmt-nix.url = "github:numtide/treefmt-nix";
     treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
     crane.url = "github:ipetkov/crane";
@@ -134,6 +134,8 @@
               );
             };
 
+          }
+          // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
             # Module wiring (udev, input group, Waybar, Firefox host). The VM
             # test definition + its script live in ./tests/nixos.
             modules = import ./tests/nixos/modules.nix { inherit pkgs inputs system; };
@@ -147,7 +149,10 @@
             extension = import ./tests/nixos/extension.nix { inherit pkgs inputs system; };
           }
           # TypeScript unit tests (extension adapters/reconciler + panel logic).
-          // (import ./tests/js-tests.nix { inherit pkgs; });
+          # Linux-only: vitest needs `localhost`, which the darwin sandbox can't resolve.
+          // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux (
+            import ./tests/js-tests.nix { inherit pkgs; }
+          );
         };
 
       flake = {
