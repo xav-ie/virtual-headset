@@ -74,11 +74,14 @@ Not on Nix, or want the Home Manager / Waybar / browser pieces? See the
 - [How it works](./docs/architecture.md) — architecture and the technical details
 - [Troubleshooting](./docs/troubleshooting.md)
 - [Development](./docs/development.md)
+- [macOS](./docs/macos.md) — the agent, the Virtual_Headset_Microphone driver, and A2DP while muted
 
 ## Requirements
 
 - Linux with kernel HID support (standard since 2012)
 - PipeWire
+
+macOS works too; see [macOS](./docs/macos.md) for its (different) requirements.
 
 The Nix package bundles the rest. Without Nix you'll also need `pw-loopback`
 (pipewire) and `pactl` (pipewire-pulse / pulseaudio-utils) — see
