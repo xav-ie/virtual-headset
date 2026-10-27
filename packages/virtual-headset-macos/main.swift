@@ -644,6 +644,8 @@ final class Controller: NSObject, NSSoundDelegate {
   var call = "none"
   var callMuted: Bool { call == "muted" }
   var showAdvanced = false
+  var glass: NSView?
+  var scrim: Scrim?
   var capture: Capture?
   var bhOut: BlackHoleOut?
   var deepFilter: DeepFilter?
@@ -1104,14 +1106,19 @@ final class Controller: NSObject, NSSoundDelegate {
       views.append(grid([("Strength", strengthRow()), ("Test", testRow())]))
       // The benchmarks favour DeepFilterNet everywhere and the gate costs speech
       // quality, so the engine and gate sit behind a disclosure.
+      // A plain chevron, not a disclosure bezel: the panel rebuilds on every click,
+      // which cut the bezel's arrow animation short.
+      let chevron = NSImage(
+        systemSymbolName: showAdvanced ? "chevron.down" : "chevron.right",
+        accessibilityDescription: nil)!
+        .withSymbolConfiguration(.init(pointSize: 10, weight: .semibold))!
       let disclose = NSButton(
-        title: "Advanced", target: self, action: #selector(advancedToggled(_:)))
-      disclose.setButtonType(.pushOnPushOff)
-      disclose.bezelStyle = .disclosure
-      disclose.state = showAdvanced ? .on : .off
-      disclose.title = ""
-      let advLabel = label("Advanced", size: 12, secondary: true)
-      views.append(NSStackView(views: [disclose, advLabel, NSView()]))
+        title: "Advanced", image: chevron, target: self, action: #selector(advancedToggled))
+      disclose.isBordered = false
+      disclose.imagePosition = .imageLeading
+      disclose.contentTintColor = .secondaryLabelColor
+      disclose.font = .systemFont(ofSize: 12)
+      views.append(NSStackView(views: [disclose, NSView()]))
       if showAdvanced {
         let modelPop = NSPopUpButton()
         for m in MODELS {
@@ -1141,19 +1148,35 @@ final class Controller: NSObject, NSSoundDelegate {
     stack.frame = NSRect(origin: .zero, size: size)
 
     let topLeft = NSPoint(x: panel.frame.minX, y: panel.frame.maxY)
-    panel.setContentSize(size)
-    let glass = backdrop(NSRect(origin: .zero, size: size), stack)
-    panel.contentView = glass
-    // The glass layer tree only exists after layout, so soften afterwards.
-    DispatchQueue.main.async { reduceGlassBlur(glass) }
+    let frame = NSRect(origin: .zero, size: size)
+    // One glass for the panel's life, with only its content swapped: a fresh glass
+    // per rebuild drew a frame or two at the stock blur before reduceGlassBlur
+    // ran, so the panel's transparency flickered.
+    if let glass, let scrim {
+      scrim.subviews.forEach { $0.removeFromSuperview() }
+      scrim.addSubview(stack)
+      panel.setContentSize(size)
+      glass.frame = frame
+      glass.layoutSubtreeIfNeeded()
+      reduceGlassBlur(glass)  // in case resizing rebuilt the backdrop's filter
+    } else {
+      let (glass, scrim) = backdrop(frame)
+      scrim.addSubview(stack)
+      self.glass = glass
+      self.scrim = scrim
+      panel.setContentSize(size)
+      panel.contentView = glass
+      // The glass layer tree only exists after layout, so soften afterwards.
+      DispatchQueue.main.async { reduceGlassBlur(glass) }
+    }
     if panel.isVisible { panel.setFrameTopLeftPoint(topLeft) }
   }
 
   // Liquid Glass (NSGlassEffectView, resolved at runtime — the nixpkgs SDK
   // predates it) with a translucent scrim so text stays readable, as in hidewin-bar.
-  func backdrop(_ frame: NSRect, _ content: NSView) -> NSView {
+  func backdrop(_ frame: NSRect) -> (NSView, Scrim) {
     let scrim = Scrim(frame: frame)
-    scrim.addSubview(content)
+    scrim.autoresizingMask = [.width, .height]
     if let cls = NSClassFromString("NSGlassEffectView") as? NSObject.Type,
       let glass = cls.init() as? NSView
     {
@@ -1161,7 +1184,7 @@ final class Controller: NSObject, NSSoundDelegate {
       glass.setValue(1, forKey: "style")
       glass.setValue(16, forKey: "cornerRadius")
       glass.setValue(scrim, forKey: "contentView")
-      return glass
+      return (glass, scrim)
     }
     let vev = NSVisualEffectView(frame: frame)
     vev.material = .menu
@@ -1170,12 +1193,12 @@ final class Controller: NSObject, NSSoundDelegate {
     vev.layer?.cornerRadius = 16
     vev.layer?.masksToBounds = true
     vev.addSubview(scrim)
-    return vev
+    return (vev, scrim)
   }
 
   @objc func muteClicked() { mute("toggle-mute") }
-  @objc func advancedToggled(_ b: NSButton) {
-    showAdvanced = b.state == .on
+  @objc func advancedToggled() {
+    showAdvanced.toggle()
     buildContent()
   }
 
