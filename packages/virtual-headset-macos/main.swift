@@ -360,6 +360,15 @@ final class Capture: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate {
     }
   }
 
+  // Ends the take in progress early, handing over what it has so far.
+  func finishTake() {
+    queue.async {
+      guard let t = self.take, let done = self.takeDone else { return }
+      self.take = nil
+      DispatchQueue.main.async { done(t) }
+    }
+  }
+
   func captureOutput(
     _ output: AVCaptureOutput, didOutput buf: CMSampleBuffer, from connection: AVCaptureConnection
   ) {
@@ -660,6 +669,7 @@ final class Controller: NSObject, NSSoundDelegate {
   var recording = false
   // When the take in progress ends; the Record button counts down to it.
   var recordingEnds: Date?
+  var takeSource: Capture?
   weak var recordButton: NSButton?
   var sound: NSSound?
   var playing: String?  // key into `takes`
@@ -1372,7 +1382,7 @@ final class Controller: NSObject, NSSoundDelegate {
     }
     let haveTakes = !recording && FileManager.default.fileExists(atPath: takes["raw"]!)
     // Record 8 s of raw mic, then play it as-is or through the current settings.
-    let recordButton = button("Record", "record.circle", #selector(record), enabled: !recording)
+    let recordButton = button("Record", "record.circle", #selector(record), enabled: true)
     self.recordButton = recordButton
     updateRecordButton()
     let buttons = NSStackView(views: [
@@ -1403,11 +1413,14 @@ final class Controller: NSObject, NSSoundDelegate {
     guard let recordButton else { return }
     guard recording, let end = recordingEnds else {
       recordButton.title = "Record"
+      recordButton.image = NSImage(systemSymbolName: "record.circle", accessibilityDescription: nil)
       return
     }
+    // A stop button while recording: pressing it again ends the take early.
     let left = Int(max(0, end.timeIntervalSinceNow).rounded(.up))
     recordButton.title = "\(max(left, 1)) s"
-    recordButton.setAccessibilityLabel("Recording, \(left) seconds left")
+    recordButton.image = NSImage(systemSymbolName: "stop.fill", accessibilityDescription: nil)
+    recordButton.setAccessibilityLabel("Stop recording, \(left) seconds left")
   }
 
   func updatePlayhead() {
@@ -1419,7 +1432,12 @@ final class Controller: NSObject, NSSoundDelegate {
   @objc func seek(_ s: NSSlider) { sound?.currentTime = s.doubleValue }
   // Records from the live capture, or, while the mic is closed (between calls, or
   // muted), opens the mic just for the take.
+  // Records 8 s; pressed again while recording, it stops and keeps the take so far.
   @objc func record() {
+    if recording {
+      takeSource?.finishTake()
+      return
+    }
     var borrowed: Capture?
     if capture == nil {
       guard case .success(let cfg) = desired(), let c = Capture(uid: cfg.uid, sink: { _ in }) else {
@@ -1433,11 +1451,13 @@ final class Controller: NSObject, NSSoundDelegate {
     stopPlayback()
     recording = true
     recordingEnds = Date().addingTimeInterval(8)
+    takeSource = source
     buildContent()
     source.record(seconds: 8) { [weak self] data in
       borrowed?.stop()
       borrowed = nil  // the take's callback held it
       guard let self else { return }
+      self.takeSource = nil
       try? data.write(to: URL(fileURLWithPath: self.takes["pcm"]!))
       self.render(self.takes["pcm"]!, self.takes["raw"]!, filters: nil)
       self.recording = false
