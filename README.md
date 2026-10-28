@@ -44,7 +44,7 @@ updates all of them too.
 <!-- diagram:how-it-works -->
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/how-it-works-dark.svg">
-  <img src="docs/diagrams/how-it-works.svg" alt="Zoom and Meet only obey a headset's mute button, and Virtual Headset gives your mic one: your call app sees an ordinary USB headset. Your voice: your mic (built-in, USB or Bluetooth) goes into Virtual Headset's microphone, with noise removed if you like, and Zoom hears you as from any headset. Mute: you press mute (a key, menu bar or panel), which presses Virtual Headset's mute button, the one call apps obey, and Zoom mutes as if you clicked its button. What you see: Zoom turns on Virtual Headset's mute light, even if you muted in Zoom, and you see muted in your menu bar and panel">
+  <img src="docs/diagrams/how-it-works.svg" alt="Your call app thinks your mic is a headset, so it obeys your mute key. Your mic and your mute key go into Virtual Headset, an ordinary USB headset made in software, with a mic and a mute button. Zoom or Meet hears you through it, and obeys your mute key">
 </picture>
 <!-- /diagram:how-it-works -->
 

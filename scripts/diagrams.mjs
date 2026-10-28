@@ -111,12 +111,6 @@ const GLYPHS = {
   plug: "M-7 -20v10M7 -20v10M-13 -10h26v8a13 13 0 0 1 -26 0zM0 11v10",
   puzzle:
     "M-16 -16h10a5 5 0 1 1 10 0h12v12a5 5 0 1 0 0 10v12h-12a5 5 0 1 1 -10 0h-10z",
-  menubar:
-    "M-24 -18h48v9h-48zM-19 -13.5h6M-9 -13.5h6M11 -13.5h3M18 -13.5h2M4 -4h20v22h-20zM8 3h12M8 10h8",
-  light:
-    "M0 -8a8 8 0 1 1 0 16a8 8 0 1 1 0 -16zM0 -21v6M0 15v6M-21 0h6M15 0h6M-15 -15l4 4M11 11l4 4M-15 15l4 -4M11 -11l4 -4",
-  button:
-    "M0 -18a18 18 0 1 1 0 36a18 18 0 1 1 0 -36zM0 -8a8 8 0 1 1 0 16a8 8 0 1 1 0 -16z",
   muted:
     "M-6 -20h12v18a6 6 0 0 1 -12 0zM-6 -20a6 6 0 0 1 12 0M-13 -4a13 13 0 0 0 26 0M0 9v11M-8 20h16M-18 -18L18 18",
 };
@@ -195,10 +189,6 @@ const listBox = ({ x, y, w, h, icon, title, items, kind = "box" }) => {
       .join("")
   );
 };
-
-// A small heading over a column of boxes, naming whose side it is.
-const columnHead = (b, s) =>
-  text("axis-strong", b.x + b.w / 2, b.y - 14, s, "middle");
 
 // --- layout ---------------------------------------------------------------------------
 // A grid of equal columns: cell(col, row) is a box's position, spanning `span` columns
@@ -325,82 +315,36 @@ const headset = {
 const callApp = { icon: "call", text: ["Zoom or Meet", "web or desktop"] };
 
 const diagrams = {
-  // Three lanes, one per thing that travels: your voice and your mute go to the
-  // call app, and its answer comes back. Each lane reads in one direction, named
-  // on the left, so no arrow needs a label.
+  // Only what Virtual Headset is. How mute stays in sync is mute-anywhere's job.
   "how-it-works"() {
     const h = headline(
-      "Zoom and Meet only obey a headset's mute button. Virtual Headset gives your mic one",
-      "your call app sees an ordinary USB headset: a microphone with your voice, a mute button it listens to, and a mute light it turns on",
+      "Your call app thinks your mic is a headset, so it obeys your mute key",
+      "Virtual Headset is an ordinary USB headset, made in software",
     );
-    const gutter = 112;
-    const cell = grid({
-      cols: 3,
-      gapX: 96,
-      rowH: 118,
-      gapY: 22,
-      top: h.top + 30,
-      left: M + gutter,
-      width: W - 2 * M - gutter,
-    });
-    const row = (r, cells) =>
-      cells.map((c, i) => ({
-        ...cell(i, r),
-        ...c,
-        ...(i === 1 ? { kind: "key" } : {}),
-      }));
-    const voice = row(0, [
-      { icon: "mic", text: ["Your mic", "built-in, USB or Bluetooth"] },
-      {
-        icon: "headset",
-        text: ["Its microphone", "noise removed, if you like"],
-      },
-      { icon: "call", text: ["Zoom hears you", "as from any headset"] },
-    ]);
-    const mute = row(1, [
-      {
-        icon: "keyboard",
-        text: ["You press mute", "a key, menu bar or panel"],
-      },
-      { icon: "button", text: ["Its mute button", "the one call apps obey"] },
-      { icon: "muted", text: ["Zoom mutes", "as if you clicked its button"] },
-    ]);
-    const seen = row(2, [
-      {
-        icon: "menubar",
-        text: ["You see muted", "in your menu bar and panel"],
-      },
-      { icon: "light", text: ["Its mute light", "on while you're muted"] },
-      { icon: "call", text: ["Zoom turns it on", "even if you muted in Zoom"] },
-    ]);
-    const lanes = [
-      [voice, "Your voice"],
-      [mute, "Mute"],
-      [seen, "What you see"],
-    ];
+    const cell = grid({ cols: 3, gapX: 120, rowH: 170, top: h.top });
+    const you = {
+      ...cell(0),
+      icon: "mic",
+      text: ["Your mic", "and your mute key"],
+    };
+    const vh = {
+      ...cell(1),
+      ...headset,
+      text: ["Virtual Headset", "a mic and a mute button"],
+    };
+    const call = {
+      ...cell(2),
+      icon: "call",
+      text: ["Zoom or Meet", "hears you", "and obeys your mute key"],
+    };
     return {
-      h: seen[0].y + seen[0].h + 24,
+      h: call.y + call.h + 24,
       body:
         h.body +
-        columnHead(voice[0], "YOU") +
-        columnHead(voice[1], "VIRTUAL HEADSET") +
-        columnHead(voice[2], "ZOOM OR MEET") +
-        lanes
-          .map(([[first], name]) =>
-            text("title", M, first.y + first.h / 2 + 6, name),
-          )
-          .join("") +
-        lanes
-          .flatMap(([boxes]) => boxes)
-          .map(box)
-          .join("") +
-        link(voice[0], voice[1]) +
-        link(voice[1], voice[2]) +
-        link(mute[0], mute[1]) +
-        link(mute[1], mute[2]) +
-        link(seen[2], seen[1]) +
-        link(seen[1], seen[0]),
-      alt: "Zoom and Meet only obey a headset's mute button, and Virtual Headset gives your mic one: your call app sees an ordinary USB headset. Your voice: your mic (built-in, USB or Bluetooth) goes into Virtual Headset's microphone, with noise removed if you like, and Zoom hears you as from any headset. Mute: you press mute (a key, menu bar or panel), which presses Virtual Headset's mute button, the one call apps obey, and Zoom mutes as if you clicked its button. What you see: Zoom turns on Virtual Headset's mute light, even if you muted in Zoom, and you see muted in your menu bar and panel",
+        [you, vh, call].map(box).join("") +
+        link(you, vh) +
+        link(vh, call),
+      alt: "Your call app thinks your mic is a headset, so it obeys your mute key. Your mic and your mute key go into Virtual Headset, an ordinary USB headset made in software, with a mic and a mute button. Zoom or Meet hears you through it, and obeys your mute key",
     };
   },
 
