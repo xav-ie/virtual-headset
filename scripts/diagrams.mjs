@@ -428,7 +428,7 @@ const diagrams = {
       ["snowflake", "Nix modules", "for NixOS and nix-darwin"],
       ["terminal", "Scriptable", "CLI, D-Bus or state files"],
       ["puzzle", "Firefox", "via an extension"],
-      ["wave", "Noise removed", "on your own Mac (macOS)"],
+      ["wave", "Noise removed", "on your own computer"],
       ["keyboard", "Mute from anywhere", "a key, your bar, a panel"],
     ].map(([icon, title, sub], i) => {
       const a = -Math.PI / 2 + (i * Math.PI) / 4;
