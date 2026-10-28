@@ -72,6 +72,12 @@ mic works.
   runs while something records from Virtual_Headset_Microphone, and muting
   unlinks it, so your mic and the denoiser go idle until you unmute.
 
+  A Bluetooth headset follows: WirePlumber's autoswitch
+  (`bluetooth.autoswitch-to-headset-profile`, on by default) traces links
+  through loopbacks and filter-chains, so it puts the headset in its headset
+  profile while a call app's recording reaches the headset's mic, and back in
+  A2DP stereo 2 s after muting cuts that link.
+
 - **The call** is the call app's off-hook light (report 2, bit 1): lit while a
   call app holds the headset.
 - **The level** comes from a passive recorder on the virtual mic, so metering

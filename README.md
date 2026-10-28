@@ -20,9 +20,9 @@ updates all of them too.
   buy.
 - **Mute from anywhere.** A keyboard shortcut, your status bar or menu bar, a
   panel, the Firefox toolbar, or a script.
-- **Bluetooth that sounds right on macOS.** While you're muted, Virtual Headset
-  lets go of the mic, so earbuds switch back from tinny hands-free audio to full
-  stereo, and back again when you unmute.
+- **Bluetooth that sounds right.** While you're muted, Virtual Headset lets go
+  of the mic, so earbuds switch back from tinny hands-free audio to full stereo,
+  and back again when you unmute.
 - **Background noise removed, on your own computer.** Optional [DeepFilterNet
   3](https://github.com/Rikorose/DeepFilterNet) noise suppression runs locally on
   Linux and macOS, with an A/B test to hear the difference.
@@ -58,7 +58,7 @@ and from then on treats them as one headset.
 <!-- diagram:capabilities -->
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/capabilities-dark.svg">
-  <img src="docs/diagrams/capabilities.svg" alt="One app, everything around your mic. Around Virtual Headset, a headset made in software: Zoom and Meet (mute in sync, web or desktop); Any mic (built-in, USB or Bluetooth); Stereo while muted (Bluetooth headsets (macOS)); Nix modules (for NixOS and nix-darwin); Scriptable (CLI, D-Bus or state files); Firefox (via an extension); Noise removed (on your own computer); Mute from anywhere (a key, your bar, a panel)">
+  <img src="docs/diagrams/capabilities.svg" alt="One app, everything around your mic. Around Virtual Headset, a headset made in software: Zoom and Meet (mute in sync, web or desktop); Any mic (built-in, USB or Bluetooth); Stereo while muted (for Bluetooth headsets); Nix modules (for NixOS and nix-darwin); Scriptable (CLI, D-Bus or state files); Firefox (via an extension); Noise removed (on your own computer); Mute from anywhere (a key, your bar, a panel)">
 </picture>
 <!-- /diagram:capabilities -->
 
@@ -118,11 +118,11 @@ toggle-mute` on macOS. Bind it to a key.
 </picture>
 <!-- /diagram:mute-anywhere -->
 
-## Stereo while you're muted, on macOS
+## Stereo while you're muted
 
 A Bluetooth headset can't play stereo and carry your voice at the same time, so
-whenever an app holds its mic, macOS switches it to mono call audio. Most call
-apps hold the mic for the whole meeting; Virtual Headset only while you're live:
+whenever an app holds its mic, it switches to mono call audio. Most call apps
+hold the mic for the whole meeting; Virtual Headset only while you're live:
 
 <!-- diagram:bluetooth -->
 <picture>
@@ -130,6 +130,9 @@ apps hold the mic for the whole meeting; Virtual Headset only while you're live:
   <img src="docs/diagrams/bluetooth.svg" alt="Muted, you hear full stereo: a Bluetooth headset only drops to call audio while your mic is open, and Virtual Headset opens it only while you're live. While you're muted your mic is off and you hear full stereo. When you unmute, the mic turns on and the headset switches to call audio, which is mono, and your first word may clip while it switches. When you mute, the mic turns off, and about 2 seconds later stereo is back">
 </picture>
 <!-- /diagram:bluetooth -->
+
+On Linux the switching is WirePlumber's Bluetooth autoswitch, which is on by
+default (`bluetooth.autoswitch-to-headset-profile`); macOS does it on its own.
 
 ## Documentation
 
