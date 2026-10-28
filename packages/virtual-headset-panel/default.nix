@@ -1,5 +1,5 @@
-# AGS (Astal) panel mirroring the virtual-headset mute state and adding a source
-# picker. Bundled into a standalone gjs binary. `agsPackages` is
+# AGS (Astal) panel: the Linux twin of the macOS panel — call mute, the mic and
+# its level, noise suppression. Bundled into a standalone gjs binary. `agsPackages` is
 # inputs.ags.packages.<system>, re-exporting the astal libraries (io, astal4)
 # alongside the ags CLI (default).
 #
@@ -44,7 +44,7 @@ stdenv.mkDerivation {
   '';
 
   meta = {
-    description = "AGS panel for virtual-headset mute + source selection";
+    description = "AGS panel for virtual-headset: call mute, mic, noise suppression";
     mainProgram = "virtual-headset-panel";
   };
 }

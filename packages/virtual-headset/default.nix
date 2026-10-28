@@ -4,6 +4,9 @@
   craneLib,
   pulseaudio ? pkgs.pulseaudio,
   pipewire ? pkgs.pipewire,
+  # DeepFilterNet's LADSPA plugin, for noise suppression in a PipeWire
+  # filter-chain.
+  deepfilternet ? pkgs.deepfilternet,
   # For the bridge's source listing/selection (listSources/setSource). Optional
   # so the package still builds standalone; the native-host wrapping is skipped
   # when null.
@@ -53,6 +56,7 @@ pkgs.symlinkJoin {
   buildInputs = [ pkgs.makeWrapper ];
   postBuild = ''
     wrapProgram $out/bin/virtual-headset \
+      --set VIRTUAL_HEADSET_LADSPA ${deepfilternet}/lib/ladspa/libdeep_filter_ladspa.so \
       --prefix PATH : ${
         lib.makeBinPath [
           pulseaudio

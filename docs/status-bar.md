@@ -32,8 +32,20 @@ Styling and the other options are in
 
 ## Desktop panel
 
-`virtual-headset-panel` is a small [AGS](https://github.com/aylur/ags) panel with
-the mute toggle and a picker for which mic to forward, in your desktop's theme:
+`virtual-headset-panel` is an [AGS](https://github.com/aylur/ags) panel laid out
+like the [macOS one](macos.md#the-panel), in your desktop's theme:
+
+- **The call** first: Live or Muted with the button that flips it, or "Not in a
+  call" (the mute button stays: on Linux it gates the mic itself).
+- **Microphone:** which mic to forward, its level while the mic is open, and
+  what it's doing.
+- **Noise suppression:** on or off, its strength, and a test that records 8 s
+  of your mic, then plays it as it was or denoised.
+- **Advanced:** keep the mic open between calls, and restart the service.
+
+Tab and Shift-Tab move between controls with a visible focus ring, Space and
+Return press them, and Escape closes the panel. Screen readers get each
+control's name.
 
 ```sh
 nix run .#virtual-headset-panel             # show it
@@ -41,8 +53,9 @@ nix run .#virtual-headset-panel -- toggle   # show or hide a running one
 ```
 
 Bind `virtual-headset-panel toggle` to a key or a status bar click. Picking
-another mic restarts the service, so the mic drops for about a second: do it
-between calls.
+another mic, or turning noise suppression or Keep the mic open on or off,
+restarts the service, so the mic drops for about a second: do it between calls.
+Strength changes apply live.
 
 ## Other status bars
 

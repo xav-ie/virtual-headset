@@ -51,6 +51,14 @@ stay unmuted until the next press.
 | `set-source <name>`                            | forward that mic (restarts the service: the mic blips)     |
 | `clear-source`                                 | follow the system's default mic again                      |
 | `monitor-mute`                                 | stream mute changes as JSON, for status bars               |
+| `state`                                        | everything a panel shows, as JSON (see below)              |
+| `monitor-state`                                | stream the state as JSON lines, one per change             |
+| `monitor-level`                                | stream the mic's level in dBFS while audio flows           |
+| `set-denoise on\|off`                          | noise suppression (restarts the service)                   |
+| `set-strength <dB>`                            | its strength, 0 to 40 (Max); applies live                  |
+| `set-keep-open on\|off`                        | keep the mic open between calls (restarts the service)     |
+| `test-record`                                  | record 8 s of your mic for the test                        |
+| `test-play original\|denoised`                 | play it as it was, or through noise suppression            |
 | `restart-service`                              | restart the user service                                   |
 | `find-device`                                  | print the headset's `/dev/hidraw*` path                    |
 
@@ -59,12 +67,21 @@ stay unmuted until the next press.
 The daemon serves `com.github.virtual_headset` at `/com/github/virtual_headset`,
 interface `com.github.virtual_headset.Mute`:
 
-| Member               |                                      |
-| -------------------- | ------------------------------------ |
-| `IsMuted() → bool`   | the current state                    |
-| `Mute()`, `Unmute()` | change it, if that changes something |
-| `Toggle()`           | flip it                              |
-| `MuteChanged(bool)`  | signal, sent on every change         |
+| Member               |                                                                   |
+| -------------------- | ----------------------------------------------------------------- |
+| `IsMuted() → bool`   | the current state                                                 |
+| `Mute()`, `Unmute()` | change it, if that changes something                              |
+| `Toggle()`           | flip it                                                           |
+| `MuteChanged(bool)`  | signal, sent on every change                                      |
+| `GetState() → s`     | the state, as JSON                                                |
+| `StateChanged(s)`    | signal with the new state, on change                              |
+| `SetStrength(d)`     | noise suppression strength, in dB                                 |
+| `Level(d)`           | signal, the mic's level about 10 times a second while audio flows |
+
+The state is a JSON object: `call` (`none`, `muted` or `unmuted`, from the call
+app's off-hook light), `muted`, `source` (the forwarded mic's name), `denoise`,
+`denoiseAvailable`, `strength` and `keepOpen`. Settings are saved under
+`~/.config/virtual-headset/`: `source`, `denoise`, `strength` and `keep-open`.
 
 ```sh
 dbus-send --session --print-reply --dest=com.github.virtual_headset \

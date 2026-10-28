@@ -63,13 +63,22 @@ mic works.
     --playback-props "media.class=Audio/Source node.name=Virtual_Headset_Mic node.description=Virtual_Headset_Microphone"
   ```
 
-  Its capture side is passive, so the mic only runs while something records
-  from Virtual_Headset_Microphone, and muting unlinks it, so your mic and any
-  denoiser in front of it (such as NoiseTorch) go idle until you unmute.
+  With noise suppression on, a PipeWire filter-chain running DeepFilterNet 3's
+  LADSPA plugin takes the loopback's place under the same node names, so apps
+  see no extra source and nothing downstream changes. Its strength is the
+  plugin's attenuation limit, set live with `pw-cli set-param`.
 
+  The capture side is passive unless you keep the mic open, so the mic only
+  runs while something records from Virtual_Headset_Microphone, and muting
+  unlinks it, so your mic and the denoiser go idle until you unmute.
+
+- **The call** is the call app's off-hook light (report 2, bit 1): lit while a
+  call app holds the headset.
+- **The level** comes from a passive recorder on the virtual mic, so metering
+  never opens the mic itself.
 - **Control** comes in as report 3 from `virtual-headset-ctl`, or over D-Bus,
-  where the daemon also announces `MuteChanged` for status bars and the
-  [Firefox bridge](browser-extension.md).
+  where the daemon also announces `MuteChanged` and `StateChanged` for status
+  bars, the panel and the [Firefox bridge](browser-extension.md).
 
 ## macOS
 

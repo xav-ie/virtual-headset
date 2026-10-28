@@ -115,17 +115,17 @@ def "main restart-service" [] {
   systemctl --user restart virtual-headset.service
 }
 
-# Path to the configured-source file. Must match the daemon's lookup
-# (src/pipewire.rs): $XDG_CONFIG_HOME/virtual-headset/source, falling back to
-# ~/.config/virtual-headset/source.
-def vh-config-path [] {
+# Path to a settings file. Must match the daemon's lookup (src/settings.rs):
+# $XDG_CONFIG_HOME/virtual-headset/<name>, falling back to
+# ~/.config/virtual-headset/<name>.
+def vh-config-path [name: string] {
     let base = ($env.XDG_CONFIG_HOME? | default $"($env.HOME)/.config")
-    $"($base)/virtual-headset/source"
+    $"($base)/virtual-headset/($name)"
 }
 
 # The configured source name, or "" if none is set.
 def vh-configured-source [] {
-    let p = (vh-config-path)
+    let p = (vh-config-path source)
     if ($p | path exists) { (open --raw $p | str trim) } else { "" }
 }
 
@@ -165,7 +165,7 @@ def "main set-source" [name: string] {
     if not $exists {
         error make {msg: $"Source not found: ($name)"}
     }
-    let p = (vh-config-path)
+    let p = (vh-config-path source)
     mkdir ($p | path dirname)
     $name | save --force --raw $p
     systemctl --user restart virtual-headset.service
@@ -173,9 +173,167 @@ def "main set-source" [name: string] {
 
 # Revert to forwarding the system default source, then restart the service.
 def "main clear-source" [] {
-    let p = (vh-config-path)
+    let p = (vh-config-path source)
     if ($p | path exists) { rm $p }
     systemctl --user restart virtual-headset.service
+}
+
+# Save an on/off setting the daemon reads at start, then restart it to apply.
+# The virtual mic drops for about a second: a between-meetings action.
+def vh-set-flag [name: string, value: string] {
+    if $value not-in [on off] {
+        error make {msg: $"Expected on or off, got: ($value)"}
+    }
+    let p = (vh-config-path $name)
+    mkdir ($p | path dirname)
+    $value | save --force --raw $p
+    systemctl --user restart virtual-headset.service
+}
+
+# Turn noise suppression (DeepFilterNet) on or off; restarts the service
+def "main set-denoise" [value: string] {
+    vh-set-flag denoise $value
+}
+
+# Keep the mic open between calls (on), or only while an app records from
+# Virtual_Headset_Microphone (off, the default); restarts the service
+def "main set-keep-open" [value: string] {
+    vh-set-flag keep-open $value
+}
+
+# Call a method on the daemon's D-Bus interface; busctl's JSON reply
+def vh-call [method: string, ...args: string] {
+    (^busctl --user --json=short call
+        com.github.virtual_headset /com/github/virtual_headset
+        com.github.virtual_headset.Mute $method ...$args)
+    | from json
+}
+
+# Set noise suppression's strength, its attenuation limit in dB (0 to 40, the
+# top of which is "Max"); applies live
+def "main set-strength" [db: number] {
+    vh-call SetStrength d ($db | into string) | ignore
+}
+
+# The daemon's state as JSON: call (none/muted/unmuted), muted, source,
+# denoise, denoiseAvailable, strength and keepOpen
+def "main state" [] {
+    vh-call GetState | get data.0
+}
+
+# Print each argument the daemon sends with a signal, one line per emission
+def vh-monitor [member: string] {
+    (^busctl --user --json=short monitor
+        $"--match=type='signal',interface='com.github.virtual_headset.Mute',member='($member)'")
+    | lines
+    | each {|line|
+        let message = (try { $line | from json } catch { null })
+        if ($message != null) and ($message.member? == $member) {
+            print ($message.payload.data.0 | into string)
+        }
+    }
+    | ignore
+}
+
+# Stream the state as JSON lines: the current one, then one per change
+def "main monitor-state" [] {
+    print (main state)
+    vh-monitor StateChanged
+}
+
+# Stream the virtual mic's level in dBFS, about 10 lines a second while audio
+# flows
+def "main monitor-level" [] {
+    vh-monitor Level
+}
+
+# Where the noise suppression test keeps its take
+def vh-take-path [] {
+    $env.XDG_RUNTIME_DIR? | default "/tmp" | path join "virtual-headset-take.wav"
+}
+
+# The source the daemon forwards: the configured one, else the system default
+def vh-forwarded-source [] {
+    let configured = (vh-configured-source)
+    if ($configured != "") { $configured } else { ^pactl get-default-source | str trim }
+}
+
+# Record 8 s of your mic, raw, for test-play. Opens the mic for the take.
+# SIGTERM ends it early and keeps what it has: `timeout` passes the signal on,
+# and pw-record finishes the file.
+def "main test-record" [] {
+    exec timeout -s INT 8 pw-record --target (vh-forwarded-source) --rate 48000 --channels 1 (vh-take-path)
+}
+
+# Play the take: `original` as recorded, or `denoised` through noise
+# suppression at its current strength, live, the way a call would hear it.
+# SIGTERM stops it.
+def "main test-play" [which: string] {
+    let take = (vh-take-path)
+    if not ($take | path exists) {
+        error make {msg: "No take yet: run test-record first"}
+    }
+    match $which {
+        original => { exec pw-play $take }
+        denoised => { vh-play-denoised $take }
+        _ => { error make {msg: $"Expected original or denoised, got: ($which)"} }
+    }
+}
+
+# Play a file through a short-lived filter-chain sink running the same
+# DeepFilterNet plugin as the daemon, at the current strength, out to the
+# default speakers.
+def vh-play-denoised [take: string] {
+    let plugin = ($env.VIRTUAL_HEADSET_LADSPA? | default "")
+    if ($plugin == "") or not ($plugin | path exists) {
+        error make {msg: "Noise suppression isn't available in this build"}
+    }
+    let strength = (main state | from json | get strength)
+    let conf = ($env.XDG_RUNTIME_DIR? | default "/tmp" | path join "virtual-headset-test-chain.conf")
+    $"context.spa-libs = {
+  audio.convert.* = audioconvert/libspa-audioconvert
+  support.*       = support/libspa-support
+}
+context.modules = [
+  { name = libpipewire-module-protocol-native }
+  { name = libpipewire-module-client-node }
+  { name = libpipewire-module-adapter }
+  { name = libpipewire-module-filter-chain
+    args = {
+      node.description = \"Virtual Headset test\"
+      filter.graph = {
+        nodes = [
+          {
+            type    = ladspa
+            name    = dfn
+            plugin  = \"($plugin)\"
+            label   = deep_filter_mono
+            control = { \"Attenuation Limit \(dB\)\" = ($strength) }
+          }
+        ]
+      }
+      audio.rate     = 48000
+      audio.channels = 1
+      audio.position = [ MONO ]
+      capture.props  = { node.name = virtual_headset_test media.class = Audio/Sink }
+      playback.props = { node.name = virtual_headset_test_out node.passive = true }
+    }
+  }
+]
+" | save --force $conf
+    # One shell owns the chain and the playback, so a SIGTERM (the panel's
+    # stop) ends both. The filter-chain only loads plugins from LADSPA_PATH's
+    # directories.
+    exec sh -c '
+        LADSPA_PATH="$1" pipewire -c "$2" >/dev/null 2>&1 & chain=$!
+        trap "kill $chain $play 2>/dev/null" EXIT INT TERM
+        for _ in $(seq 50); do
+            pw-cli ls Node | grep -q "node.name = \"virtual_headset_test\"" && break
+            sleep 0.1
+        done
+        pw-play --target virtual_headset_test "$3" & play=$!
+        wait $play
+    ' sh ($plugin | path dirname) $conf $take
 }
 
 # Helper to output waybar JSON with current source (fetched dynamically)
