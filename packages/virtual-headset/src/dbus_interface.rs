@@ -1,7 +1,7 @@
 use crossbeam_channel::Sender;
 use serde::Serialize;
 use std::sync::{Arc, Mutex};
-use zbus::{SignalContext, blocking::Connection, interface};
+use zbus::{blocking::Connection, interface, object_server::SignalEmitter};
 
 /// A request from D-Bus for the daemon's main loop, which owns the device and
 /// the audio graph and is the only place state changes.
@@ -99,15 +99,15 @@ impl VirtualHeadset {
 
     /// Signal emitted when mute state changes
     #[zbus(signal)]
-    async fn mute_changed(signal_ctxt: &SignalContext<'_>, muted: bool) -> zbus::Result<()>;
+    async fn mute_changed(emitter: &SignalEmitter<'_>, muted: bool) -> zbus::Result<()>;
 
     /// Signal emitted when anything in the state changes, with the new state as JSON
     #[zbus(signal)]
-    async fn state_changed(signal_ctxt: &SignalContext<'_>, state: String) -> zbus::Result<()>;
+    async fn state_changed(emitter: &SignalEmitter<'_>, state: String) -> zbus::Result<()>;
 
     /// The virtual mic's level in dBFS, about 10 times a second while audio flows
     #[zbus(signal)]
-    async fn level(signal_ctxt: &SignalContext<'_>, db: f64) -> zbus::Result<()>;
+    async fn level(emitter: &SignalEmitter<'_>, db: f64) -> zbus::Result<()>;
 }
 
 /// D-Bus connection wrapper
@@ -139,11 +139,11 @@ impl DBusService {
         Ok(Self { connection, state })
     }
 
-    fn signal_context(&self) -> zbus::Result<SignalContext<'static>> {
+    fn signal_emitter(&self) -> zbus::Result<SignalEmitter<'static>> {
         let object_server = self.connection.object_server();
         let iface_ref =
             object_server.interface::<_, VirtualHeadset>("/com/github/virtual_headset")?;
-        Ok(iface_ref.signal_context().to_owned())
+        Ok(iface_ref.signal_emitter().to_owned())
     }
 
     /// Store the new state and announce it: `MuteChanged` (for status bars that
@@ -152,17 +152,17 @@ impl DBusService {
         let muted = state.muted;
         let json = serde_json::to_string(&state)?;
         self.state.set(state);
-        let ctxt = self.signal_context()?;
+        let emitter = self.signal_emitter()?;
         zbus::block_on(async {
-            VirtualHeadset::mute_changed(&ctxt, muted).await?;
-            VirtualHeadset::state_changed(&ctxt, json).await
+            VirtualHeadset::mute_changed(&emitter, muted).await?;
+            VirtualHeadset::state_changed(&emitter, json).await
         })?;
         Ok(())
     }
 
     pub fn publish_level(&self, db: f64) -> Result<(), Box<dyn std::error::Error>> {
-        let ctxt = self.signal_context()?;
-        zbus::block_on(VirtualHeadset::level(&ctxt, db))?;
+        let emitter = self.signal_emitter()?;
+        zbus::block_on(VirtualHeadset::level(&emitter, db))?;
         Ok(())
     }
 }
