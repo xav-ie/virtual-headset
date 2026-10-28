@@ -658,6 +658,9 @@ final class Controller: NSObject, NSSoundDelegate {
   // A/B test: record the raw mic once, then render it through the CURRENT settings
   // on every "Denoised" play — so you can tweak the gate and re-listen to one take.
   var recording = false
+  // When the take in progress ends; the Record button counts down to it.
+  var recordingEnds: Date?
+  weak var recordButton: NSButton?
   var sound: NSSound?
   var playing: String?  // key into `takes`
   let playhead = NSSlider(value: 0, minValue: 0, maxValue: 1, target: nil, action: nil)
@@ -743,6 +746,7 @@ final class Controller: NSObject, NSSoundDelegate {
       guard let self, self.panel.isVisible else { return }
       self.updateMeter()
       self.updatePlayhead()
+      self.updateRecordButton()
     }
     // ponytail: 1 s poll of process objects; listen to kAudioProcessPropertyIsRunningInput
     // per process if start-up lag ever matters.
@@ -1368,10 +1372,11 @@ final class Controller: NSObject, NSSoundDelegate {
     }
     let haveTakes = !recording && FileManager.default.fileExists(atPath: takes["raw"]!)
     // Record 8 s of raw mic, then play it as-is or through the current settings.
+    let recordButton = button("Record", "record.circle", #selector(record), enabled: !recording)
+    self.recordButton = recordButton
+    updateRecordButton()
     let buttons = NSStackView(views: [
-      button(
-        recording ? "8 s…" : "Record", "record.circle", #selector(record),
-        enabled: !recording),
+      recordButton,
       button(
         "Original", playing == "raw" ? "stop.fill" : "play.fill", #selector(playRaw),
         enabled: haveTakes),
@@ -1393,6 +1398,18 @@ final class Controller: NSObject, NSSoundDelegate {
     col.alignment = .leading
     return col
   }
+  // "8 s", "7 s", … while a take records: whole seconds left, rounded up.
+  func updateRecordButton() {
+    guard let recordButton else { return }
+    guard recording, let end = recordingEnds else {
+      recordButton.title = "Record"
+      return
+    }
+    let left = Int(max(0, end.timeIntervalSinceNow).rounded(.up))
+    recordButton.title = "\(max(left, 1)) s"
+    recordButton.setAccessibilityLabel("Recording, \(left) seconds left")
+  }
+
   func updatePlayhead() {
     guard let sound, playing != nil else { return }
     playhead.maxValue = max(sound.duration, 0.1)
@@ -1415,6 +1432,7 @@ final class Controller: NSObject, NSSoundDelegate {
     guard let source = capture ?? borrowed else { return }
     stopPlayback()
     recording = true
+    recordingEnds = Date().addingTimeInterval(8)
     buildContent()
     source.record(seconds: 8) { [weak self] data in
       borrowed?.stop()
