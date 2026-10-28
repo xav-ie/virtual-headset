@@ -7,7 +7,8 @@
 // Colors come from assets/palette.json, like the diagrams.
 // Run: node scripts/screenshots.mjs [path/to/virtual-headset]
 //   (defaults to `nix build .#virtual-headset`; needs Google Chrome, or CHROME=…).
-// Each panel state flashes in the screen's corner while it's captured.
+// Each panel state flashes in the screen's corner while it's captured. Needs
+// oxipng (in the dev shell) for the final lossless optimization.
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -36,10 +37,11 @@ mkdirSync(asset("panel"), { recursive: true });
 execFileSync(bin, ["screenshot", asset("panel")], { stdio: "inherit" });
 
 // --- the hero ----------------------------------------------------------------------
-// Only the top of the desktop: the menu bar and the open panel are the point, so
-// the call window runs off the bottom edge.
-const W = 1280,
-  H = 400;
+// Only the top of a narrow desktop: the menu bar and the open panel are the
+// point, so the call window keeps its size, runs off the bottom edge, and sits
+// under the panel (which covers its second tile).
+const W = 900,
+  H = 330;
 // The mic glyph, as the bar item draws it: red while live.
 const mic = (color) =>
   `<svg viewBox="0 0 24 24" width="16" height="16"><rect x="8" y="2" width="8" height="13" rx="4" fill="${color}"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round"/></svg>`;
@@ -110,4 +112,20 @@ execFileSync(
   ],
   { stdio: "ignore" },
 );
-console.log("Wrote assets/panel/*.png and assets/screenshot.png");
+// Lossless recompression, so the committed images are already as small as they get.
+execFileSync(
+  "oxipng",
+  [
+    "--opt",
+    "max",
+    "--strip",
+    "safe",
+    "--quiet",
+    asset("screenshot.png"),
+    ...["live", "muted", "no-call", "advanced", "keyboard"].map((s) =>
+      asset("panel", `${s}.png`),
+    ),
+  ],
+  { stdio: "inherit" },
+);
+console.log("Wrote and optimized assets/panel/*.png and assets/screenshot.png");
