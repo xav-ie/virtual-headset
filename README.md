@@ -27,7 +27,9 @@ updates all of them too.
   3](https://github.com/Rikorose/DeepFilterNet) noise suppression runs on your
   own computer, with an A/B test to hear the difference.
 - **In the browser too.** Chrome and other Chromium browsers talk to the
-  headset directly; a small extension does it for Firefox.
+  headset directly. Firefox can't, so a small extension does it there; you
+  only [need it](docs/browser-extension.md#do-you-need-it) if you take calls in
+  Firefox.
 - **Starts muted on Linux,** so you're never live by accident after logging in.
 - **Nix modules** for NixOS, nix-darwin and Home Manager.
 

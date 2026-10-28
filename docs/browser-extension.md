@@ -1,9 +1,30 @@
 # Firefox
 
-Chrome and other Chromium browsers let Zoom and Meet talk to headsets directly
-(WebHID), so they work with Virtual Headset out of the box. **Firefox doesn't**,
-so in Firefox the web apps never see the headset. A small extension fills the
-gap, on Linux and macOS, and keeps mute in sync both ways:
+## Do you need it?
+
+Only if you take calls in Firefox:
+
+| You take calls in                                                    | Extension?                                  |
+| -------------------------------------------------------------------- | ------------------------------------------- |
+| Zoom's desktop app                                                   | No: it talks to the headset itself          |
+| Zoom or Meet in Chrome, Edge, Brave, Arc or another Chromium browser | No: they talk to the headset through WebHID |
+| Zoom or Meet in **Firefox**                                          | **Yes**                                     |
+
+Firefox can't talk to USB headsets (it has no WebHID), so in a Firefox tab Zoom
+and Meet never see Virtual Headset. Without the extension:
+
+- your mute key and status bar don't mute the call, and
+- nothing outside the tab knows whether you're muted, so your status bar, menu
+  bar and panel can't show it, and on a Mac your mic stays open while muted, so
+  a Bluetooth headset stays in call audio.
+
+With it, a Firefox call behaves like any other: your mute key mutes the tab,
+muting in the tab updates everything else, and on a Mac you hear stereo while
+you're muted.
+
+## How it works
+
+The extension works on Linux and macOS and keeps mute in sync both ways:
 
 - Press your mute key or click your status bar, and the Zoom or Meet tab mutes:
   the extension clicks its mic button.
@@ -15,8 +36,6 @@ gap, on Linux and macOS, and keeps mute in sync both ways:
   <img src="diagrams/firefox-bridge.svg" alt="Firefox can't use headsets, so the extension presses the button for you. Virtual Headset, which knows whether you're muted, talks through a helper that lets Firefox reach it to the Firefox extension, a mic in your toolbar. The extension clicks the Zoom or Meet tab's own mic button, and reads it back so Virtual Headset knows when you click it yourself">
 </picture>
 <!-- /diagram:firefox-bridge -->
-
-Zoom's desktop app doesn't need it: it talks to the headset itself.
 
 **On macOS** the meeting tab becomes your call. While it's open, the menu bar
 and the panel show whether you're live or muted, your mic is released while
