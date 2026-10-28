@@ -111,6 +111,10 @@ const GLYPHS = {
   plug: "M-7 -20v10M7 -20v10M-13 -10h26v8a13 13 0 0 1 -26 0zM0 11v10",
   puzzle:
     "M-16 -16h10a5 5 0 1 1 10 0h12v12a5 5 0 1 0 0 10v12h-12a5 5 0 1 1 -10 0h-10z",
+  menubar:
+    "M-24 -18h48v9h-48zM-19 -13.5h6M-9 -13.5h6M11 -13.5h3M18 -13.5h2M4 -4h20v22h-20zM8 3h12M8 10h8",
+  light:
+    "M0 -8a8 8 0 1 1 0 16a8 8 0 1 1 0 -16zM0 -21v6M0 15v6M-21 0h6M15 0h6M-15 -15l4 4M11 11l4 4M-15 15l4 -4M11 -11l4 -4",
   button:
     "M0 -18a18 18 0 1 1 0 36a18 18 0 1 1 0 -36zM0 -8a8 8 0 1 1 0 16a8 8 0 1 1 0 -16z",
   muted:
@@ -195,22 +199,6 @@ const listBox = ({ x, y, w, h, icon, title, items, kind = "box" }) => {
 // A small heading over a column of boxes, naming whose side it is.
 const columnHead = (b, s) =>
   text("axis-strong", b.x + b.w / 2, b.y - 14, s, "middle");
-
-// An arrow back from `from` to `to` that runs under both boxes, labeled at the
-// bottom: the answer that comes back once the trip there is done.
-const under = (from, to, s, drop = 34) => {
-  const y = Math.max(from.y + from.h, to.y + to.h) + drop;
-  const x1 = from.x + from.w / 2,
-    x2 = to.x + to.w / 2;
-  return (
-    arrow([
-      [x1, from.y + from.h],
-      [x1, y],
-      [x2, y],
-      [x2, to.y + to.h],
-    ]) + label((x1 + x2) / 2, y, s)
-  );
-};
 
 // --- layout ---------------------------------------------------------------------------
 // A grid of equal columns: cell(col, row) is a box's position, spanning `span` columns
@@ -337,71 +325,82 @@ const headset = {
 const callApp = { icon: "call", text: ["Zoom or Meet", "web or desktop"] };
 
 const diagrams = {
-  // Two lanes, because Virtual Headset carries two separate things: your voice,
-  // and your mute. The return arrow is what makes the second lane worth having.
+  // Three lanes, one per thing that travels: your voice and your mute go to the
+  // call app, and its answer comes back. Each lane reads in one direction, named
+  // on the left, so no arrow needs a label.
   "how-it-works"() {
     const h = headline(
       "Zoom and Meet only obey a headset's mute button. Virtual Headset gives your mic one",
-      "your call app sees an ordinary USB headset: a microphone with your voice, and a mute button it listens to",
+      "your call app sees an ordinary USB headset: a microphone with your voice, a mute button it listens to, and a mute light it turns on",
     );
+    const gutter = 112;
     const cell = grid({
       cols: 3,
-      gapX: 130,
-      rowH: 128,
-      gapY: 26,
+      gapX: 96,
+      rowH: 118,
+      gapY: 22,
       top: h.top + 30,
+      left: M + gutter,
+      width: W - 2 * M - gutter,
     });
-    const mic = {
-      ...cell(0, 0),
-      icon: "mic",
-      text: ["Your mic", "built-in, USB or Bluetooth"],
-    };
-    const key = {
-      ...cell(0, 1),
-      icon: "keyboard",
-      text: ["Your mute key", "or menu bar, panel, browser"],
-    };
-    const vMic = {
-      ...cell(1, 0),
-      icon: "headset",
-      kind: "key",
-      text: ["Its microphone", "your voice, noise removed if you like"],
-    };
-    const vButton = {
-      ...cell(1, 1),
-      icon: "button",
-      kind: "key",
-      text: ["Its mute button", "pressed for you"],
-    };
-    const hears = {
-      ...cell(2, 0),
-      icon: "call",
-      text: ["Hears you", "as from any headset"],
-    };
-    const mutes = {
-      ...cell(2, 1),
-      icon: "muted",
-      text: ["Mutes", "as if you'd clicked its own button"],
-    };
-    const back = under(
-      mutes,
-      key,
-      "and tells your menu bar and panel you're muted",
-    );
+    const row = (r, cells) =>
+      cells.map((c, i) => ({
+        ...cell(i, r),
+        ...c,
+        ...(i === 1 ? { kind: "key" } : {}),
+      }));
+    const voice = row(0, [
+      { icon: "mic", text: ["Your mic", "built-in, USB or Bluetooth"] },
+      {
+        icon: "headset",
+        text: ["Its microphone", "noise removed, if you like"],
+      },
+      { icon: "call", text: ["Zoom hears you", "as from any headset"] },
+    ]);
+    const mute = row(1, [
+      {
+        icon: "keyboard",
+        text: ["You press mute", "a key, menu bar or panel"],
+      },
+      { icon: "button", text: ["Its mute button", "the one call apps obey"] },
+      { icon: "muted", text: ["Zoom mutes", "as if you clicked its button"] },
+    ]);
+    const seen = row(2, [
+      {
+        icon: "menubar",
+        text: ["You see muted", "in your menu bar and panel"],
+      },
+      { icon: "light", text: ["Its mute light", "on while you're muted"] },
+      { icon: "call", text: ["Zoom turns it on", "even if you muted in Zoom"] },
+    ]);
+    const lanes = [
+      [voice, "Your voice"],
+      [mute, "Mute"],
+      [seen, "What you see"],
+    ];
     return {
-      h: mutes.y + mutes.h + 34 + 30,
+      h: seen[0].y + seen[0].h + 24,
       body:
         h.body +
-        columnHead(mic, "YOU") +
-        columnHead(vMic, "VIRTUAL HEADSET") +
-        columnHead(hears, "ZOOM OR MEET") +
-        [mic, key, vMic, vButton, hears, mutes].map(box).join("") +
-        link(mic, vMic, { label: "your voice" }) +
-        link(vMic, hears, { label: "your voice" }) +
-        link(key, vButton, { label: "press" }) +
-        link(vButton, mutes, { label: "press" }) +
-        back,
-      alt: "Zoom and Meet only obey a headset's mute button, and Virtual Headset gives your mic one: your call app sees an ordinary USB headset. Your voice goes from your mic (built-in, USB or Bluetooth) into Virtual Headset's microphone, with noise removed if you like, and Zoom or Meet hears you as from any headset. Your mute key (or menu bar, panel or browser) presses Virtual Headset's mute button, and Zoom or Meet mutes as if you'd clicked its own button, then tells your menu bar and panel you're muted",
+        columnHead(voice[0], "YOU") +
+        columnHead(voice[1], "VIRTUAL HEADSET") +
+        columnHead(voice[2], "ZOOM OR MEET") +
+        lanes
+          .map(([[first], name]) =>
+            text("title", M, first.y + first.h / 2 + 6, name),
+          )
+          .join("") +
+        lanes
+          .flatMap(([boxes]) => boxes)
+          .map(box)
+          .join("") +
+        link(voice[0], voice[1]) +
+        link(voice[1], voice[2]) +
+        link(mute[0], mute[1]) +
+        link(mute[1], mute[2]) +
+        link(seen[2], seen[1]) +
+        link(seen[1], seen[0]),
+      alt: "Zoom and Meet only obey a headset's mute button, and Virtual Headset gives your mic one: your call app sees an ordinary USB headset. Your voice: your mic (built-in, USB or Bluetooth) goes into Virtual Headset's microphone, with noise removed if you like, and Zoom hears you as from any headset. Mute: you press mute (a key, menu bar or panel), which presses Virtual Headset's mute button, the one call apps obey, and Zoom mutes as if you clicked its button. What you see: Zoom turns on Virtual Headset's mute light, even if you muted in Zoom, and you see muted in your menu bar and panel",
     };
   },
 
