@@ -36,8 +36,10 @@ mkdirSync(asset("panel"), { recursive: true });
 execFileSync(bin, ["screenshot", asset("panel")], { stdio: "inherit" });
 
 // --- the hero ----------------------------------------------------------------------
+// Only the top of the desktop: the menu bar and the open panel are the point, so
+// the call window runs off the bottom edge.
 const W = 1280,
-  H = 760;
+  H = 400;
 // The mic glyph, as the bar item draws it: red while live.
 const mic = (color) =>
   `<svg viewBox="0 0 24 24" width="16" height="16"><rect x="8" y="2" width="8" height="13" rx="4" fill="${color}"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round"/></svg>`;
@@ -64,7 +66,8 @@ const hero = `<!doctype html>
   .menubar i { display: block; height: 11px; border-radius: 3px; background: ${c.muted}; opacity: .7; }
   .menubar .mic { display: grid; place-items: center; width: 30px; height: 22px; border-radius: 6px; background: rgba(255,255,255,.14); }
   .window { position: absolute; left: 36px; top: 56px; width: 820px; height: 660px; border-radius: 12px; overflow: hidden;
-            background: #202124; box-shadow: 0 20px 50px rgba(0,0,0,.5); }
+            background: #202124; box-shadow: 0 20px 50px rgba(0,0,0,.5);
+            filter: grayscale(.9) brightness(.85); } /* backdrop: the panel's red Live stands out */
   .toolbar { height: 46px; background: #35363a; display: flex; align-items: center; gap: 8px; padding: 0 14px; }
   .toolbar span { width: 12px; height: 12px; border-radius: 50%; }
   .url { flex: 1; margin-left: 14px; height: 28px; border-radius: 14px; background: #202124; color: #e8eaed;
