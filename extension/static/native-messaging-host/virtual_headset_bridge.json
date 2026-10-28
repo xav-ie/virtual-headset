@@ -1,6 +1,6 @@
 {
   "name": "virtual_headset_bridge",
-  "description": "Virtual Headset D-Bus bridge for the Firefox extension",
+  "description": "Virtual Headset bridge for the Firefox extension",
   "path": "REPLACE_WITH_ABSOLUTE_PATH_TO/virtual-headset-bridge",
   "type": "stdio",
   "allowed_extensions": ["virtual-headset@local"]

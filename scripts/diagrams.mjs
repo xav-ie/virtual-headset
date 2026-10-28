@@ -427,7 +427,7 @@ const diagrams = {
       ["bluetooth", "Stereo while muted", "Bluetooth headsets (macOS)"],
       ["snowflake", "Nix modules", "for NixOS and nix-darwin"],
       ["terminal", "Scriptable", "CLI, D-Bus or state files"],
-      ["puzzle", "Firefox", "via an extension (Linux)"],
+      ["puzzle", "Firefox", "via an extension"],
       ["wave", "Noise removed", "on your own Mac (macOS)"],
       ["keyboard", "Mute from anywhere", "a key, your bar, a panel"],
     ].map(([icon, title, sub], i) => {

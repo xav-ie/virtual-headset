@@ -88,3 +88,8 @@ mic works.
 - **Control** is the `virtual-headset` command, which messages the running app;
   its state goes to files in `~/.cache/virtual-headset` and a distributed
   notification, for [menu bars](macos.md#your-menu-bar).
+- **Firefox**, with no WebHID, can't reach the headset. `virtual-headset bridge`
+  (the extension's native-messaging host, speaking the Linux bridge's protocol)
+  makes a Zoom or Meet tab the call instead: the tab's mute becomes the call's,
+  and a mute press on that call has the extension click the tab's mic button.
+  A call app connected to the headset comes first.

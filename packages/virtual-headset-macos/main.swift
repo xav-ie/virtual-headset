@@ -25,6 +25,11 @@ import os
 let TOGGLE = Notification.Name("com.github.virtual-headset.toggle-panel")
 let CHANGED = Notification.Name("com.github.virtual-headset.changed")
 let MUTE = Notification.Name("com.github.virtual-headset.mute")
+// From the Firefox bridge (see runBridge): a meeting tab's mute, the mic to
+// forward, and a restart.
+let BROWSER_CALL = Notification.Name("com.github.virtual-headset.browser-call")
+let INPUT = Notification.Name("com.github.virtual-headset.input")
+let RESTART = Notification.Name("com.github.virtual-headset.restart")
 let OUT_NAME = "Virtual_Headset_Microphone"
 let OUT_UID = "Virtual_Headset_Microphone_UID"
 // State for bar integrations (see publish()).
@@ -647,10 +652,14 @@ final class Controller: NSObject, NSSoundDelegate {
   var procs: [Process] = []  // the arnndn ffmpeg, when RNNoise is the engine
   var standby = false
   var headset: Headset?
-  // The call app's LEDs: "none" (on-hook / never connected), "muted", "unmuted".
-  // While muted the real mic is released (Bluetooth headsets go back to A2DP);
-  // only the call app's LED reports change it.
-  var call = "none"
+  // The call: "none", "muted" or "unmuted". A call app paired with the headset
+  // reports it through the headset's LEDs (`hidCall`); a Firefox meeting tab,
+  // which can't reach the headset, through the bridge (`browserCall`). The
+  // headset wins when both are in a call. While muted the real mic is released
+  // (Bluetooth headsets go back to A2DP).
+  var hidCall = "none"
+  var browserCall = "none"
+  var call: String { hidCall != "none" ? hidCall : browserCall }
   var callMuted: Bool { call == "muted" }
   var showAdvanced = false
   var scrim: Scrim?
@@ -732,9 +741,25 @@ final class Controller: NSObject, NSSoundDelegate {
       [weak self] note in
       self?.mute(note.object as? String)
     }
+    DistributedNotificationCenter.default().addObserver(
+      forName: BROWSER_CALL, object: nil, queue: .main
+    ) { [weak self] note in
+      self?.setBrowserCall(note.object as? String ?? "none")
+    }
+    // The bridge has written the new `input` to our defaults already.
+    DistributedNotificationCenter.default().addObserver(forName: INPUT, object: nil, queue: .main) {
+      [weak self] _ in
+      self?.reconcile()
+    }
+    // launchd's KeepAlive starts us again.
+    DistributedNotificationCenter.default().addObserver(forName: RESTART, object: nil, queue: .main) {
+      [weak self] _ in
+      self?.stop()
+      exit(0)
+    }
     headset = Headset(
       led: { [weak self] muted, offHook in
-        self?.setCall(!offHook ? "none" : muted ? "muted" : "unmuted")
+        self?.setHidCall(!offHook ? "none" : muted ? "muted" : "unmuted")
       },
       command: { [weak self] c in self?.mute([1: "mute", 2: "unmute", 3: "toggle-mute"][c]) })
     for sel in [kAudioHardwarePropertyDefaultInputDevice, kAudioHardwarePropertyDevices] {
@@ -958,11 +983,18 @@ final class Controller: NSObject, NSSoundDelegate {
     for p in dead where p.isRunning { kill(p.processIdentifier, SIGKILL) }
   }
 
-  // The press only asks; the call app's LED report is what changes `call`.
+  // On a headset call the press only asks: the call app's LED report is what
+  // changes `call`. A Firefox call has no headset to press, so the press sets it,
+  // and the bridge has the extension click the tab's mic button to match.
   func mute(_ cmd: String?) {
     guard call != "none" else { return nudge() }
     switch cmd {
-    case "mute" where !callMuted, "unmute" where callMuted, "toggle-mute": headset?.pressMute()
+    case "mute" where !callMuted, "unmute" where callMuted, "toggle-mute":
+      if hidCall != "none" {
+        headset?.pressMute()
+      } else {
+        setBrowserCall(callMuted ? "unmuted" : "muted")
+      }
     default: break
     }
   }
@@ -974,9 +1006,15 @@ final class Controller: NSObject, NSSoundDelegate {
     post(CHANGED, nil)
   }
 
-  func setCall(_ state: String) {
-    guard state != call else { return }
-    call = state
+  func setHidCall(_ state: String) {
+    guard state != hidCall else { return }
+    hidCall = state
+    reconcile()
+  }
+
+  func setBrowserCall(_ state: String) {
+    guard ["none", "muted", "unmuted"].contains(state), state != browserCall else { return }
+    browserCall = state
     reconcile()
   }
 
@@ -1548,7 +1586,7 @@ func screenshots(to dir: String) {
   ] {
     c.focusID = focus
     c.keyboardActive = focus != nil
-    c.call = call
+    c.hidCall = call
     c.denoise = denoise
     c.status = status
     c.shownLevel = level
@@ -1565,6 +1603,114 @@ func screenshots(to dir: String) {
     c.panel.orderOut(nil)
   }
 }
+
+// MARK: Firefox bridge
+
+// `virtual-headset bridge` (installed as bin/virtual-headset-bridge): the native-
+// messaging host Firefox starts for the extension. It speaks the Linux bridge's
+// protocol (packages/virtual-headset/src/bin/virtual-headset-bridge.rs), so the
+// extension is the same on both: each message is a 4-byte native-endian length
+// and UTF-8 JSON. It relays between the extension and the running agent through
+// distributed notifications. Firefox has no WebHID, so its Zoom and Meet tabs
+// never reach the Virtual_Headset device; through the bridge the tab becomes the
+// call instead:
+//   extension → agent: the tab's mute (setMute) and whether a meeting tab is
+//     open (call) as BROWSER_CALL; the toolbar's toggle as a MUTE press; the mic
+//     to forward as `input` in the agent's defaults, then INPUT
+//   agent → extension: the call's mute, as state, on every CHANGED
+func runBridge() -> Never {
+  let out = FileHandle.standardOutput
+  func send(_ msg: [String: Any]) {
+    guard let body = try? JSONSerialization.data(withJSONObject: msg) else { return }
+    var length = UInt32(body.count)
+    out.write(Data(bytes: &length, count: 4) + body)
+  }
+  func callFile() -> String {
+    (try? String(contentsOfFile: "\(CACHE)/call", encoding: .utf8))?
+      .trimmingCharacters(in: .whitespacesAndNewlines) ?? "none"
+  }
+  // The call's mute, if there's a call.
+  func sendState() {
+    switch callFile() {
+    case "muted": send(["type": "state", "muted": true])
+    case "unmuted": send(["type": "state", "muted": false])
+    default: break
+    }
+  }
+  func sendSources() {
+    let chosen = UserDefaults.standard.string(forKey: "input") ?? ""
+    let def = defaultInput()
+    let mics = devices().filter { $0.isInput && $0.uid != OUT_UID }
+    send([
+      "type": "sources",
+      "sources": mics.map {
+        ["name": $0.name, "description": $0.name, "default": $0.id == def, "configured": $0.name == chosen]
+      },
+    ])
+  }
+  func choose(_ input: String) {
+    UserDefaults.standard.set(input, forKey: "input")
+    post(INPUT, nil)
+    sendSources()
+  }
+
+  // The tab's last reported mute, so a newly opened meeting tab rejoins as the call.
+  var tabMuted: Bool?
+  func handle(_ msg: [String: Any]) {
+    switch msg["type"] as? String {
+    case "setMute":
+      let muted = msg["muted"] as? Bool ?? false
+      tabMuted = muted
+      post(BROWSER_CALL, muted ? "muted" : "unmuted")
+    case "call":
+      if msg["active"] as? Bool != true {
+        post(BROWSER_CALL, "none")
+      } else if let tabMuted {
+        post(BROWSER_CALL, tabMuted ? "muted" : "unmuted")
+      }
+    case "toggle": post(MUTE, "toggle-mute")
+    case "query": sendState()
+    case "listSources": sendSources()
+    case "setSource": choose(msg["name"] as? String ?? "")
+    case "clearSource": choose("")
+    case "restartService": post(RESTART, nil)
+    case "ping": send(["type": "pong"])
+    case let type: send(["type": "error", "message": "unknown message type \(type ?? "none")"])
+    }
+  }
+
+  DistributedNotificationCenter.default().addObserver(forName: CHANGED, object: nil, queue: .main) {
+    _ in sendState()
+  }
+  // Read on a thread of its own; handle on the main queue, where the
+  // notifications arrive too, so state is only touched there.
+  Thread.detachNewThread {
+    let input = FileHandle.standardInput
+    while true {
+      let header = input.readData(ofLength: 4)
+      guard header.count == 4 else { break }
+      let length = header.withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }
+      let body = input.readData(ofLength: Int(length))
+      guard body.count == Int(length) else { break }
+      DispatchQueue.main.async {
+        guard let msg = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any] else {
+          return send(["type": "error", "message": "invalid message"])
+        }
+        handle(msg)
+      }
+    }
+    // Firefox closed the port: the tab's call ends with it.
+    DispatchQueue.main.async {
+      post(BROWSER_CALL, "none")
+      exit(0)
+    }
+  }
+  sendState()
+  RunLoop.main.run()
+  exit(0)
+}
+
+if CommandLine.arguments.dropFirst().first == "bridge" { runBridge() }
 
 signal(SIGPIPE, SIG_IGN)  // a dead ffmpeg must not kill us mid-write
 let app = NSApplication.shared

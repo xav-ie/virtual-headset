@@ -26,6 +26,15 @@
 let
   cfg = config.services.virtual-headset;
   packages = self.packages.${pkgs.stdenv.hostPlatform.system};
+  firefoxHost = pkgs.writeText "virtual_headset_bridge.json" (
+    builtins.toJSON {
+      name = "virtual_headset_bridge";
+      description = "Virtual Headset bridge for the Firefox extension";
+      path = "${cfg.package}/bin/virtual-headset-bridge";
+      type = "stdio";
+      allowed_extensions = [ packages.virtual-headset-firefox.extensionId ];
+    }
+  );
 in
 {
   options.services.virtual-headset = {
@@ -44,6 +53,11 @@ in
       defaultText = lib.literalExpression "virtual-headset.packages.\${system}.virtual-headset-driver";
       description = "The Virtual_Headset_Microphone loopback driver (a renamed BlackHole).";
     };
+
+    firefox = lib.mkEnableOption ''
+      the Firefox extension's native-messaging host, for every user. Firefox has
+      no WebHID, so this is how Zoom and Meet tabs in Firefox stay in sync; install
+      the signed extension itself from the latest release'';
 
     logDir = lib.mkOption {
       type = lib.types.str;
@@ -69,8 +83,16 @@ in
     };
 
     # coreaudiod only scans HAL plug-ins when it starts, so it's restarted when
-    # the driver changes (all audio drops for a moment), and only then.
+    # the driver changes (all audio drops for a moment), and only then. Firefox
+    # reads native-messaging hosts for all users from /Library.
     system.activationScripts.postActivation.text = ''
+      ${lib.optionalString cfg.firefox ''
+        hosts="/Library/Application Support/Mozilla/NativeMessagingHosts"
+        mkdir -p "$hosts"
+        cp ${firefoxHost} "$hosts/virtual_headset_bridge.json"
+        chmod 644 "$hosts/virtual_headset_bridge.json"
+      ''}
+
       src=${cfg.driverPackage}/Library/Audio/Plug-Ins/HAL/VirtualHeadset.driver
       dst=/Library/Audio/Plug-Ins/HAL/VirtualHeadset.driver
       if ! diff -rq "$src" "$dst" >/dev/null 2>&1; then
