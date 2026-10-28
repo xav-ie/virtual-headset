@@ -9,8 +9,8 @@ uhid-virt = "0.0.8"
 # stop/restart runs the loopback cleanup instead of orphaning the pw-loopback
 # child. SIGKILL still can't be caught — kill_existing_loopbacks covers that.
 ctrlc = { version = "3.4", features = ["termination"] }
-crossterm = "0.28"
-zbus = "4.0"
+crossterm = "0.29"
+zbus = "5.19"
 crossbeam-channel = "0.5"
 atty = "0.2"
 serde = { version = "1", features = ["derive"] }
