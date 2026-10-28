@@ -208,12 +208,11 @@ final class Headset {
   }
 }
 
-// MARK: Glass
+// MARK: Backdrop
 
-// Translucent wash between the glass and the controls: .clear glass alone leaves
-// text unreadable over a bright window behind the panel. A CGColor is a snapshot,
-// so re-resolve it (and re-soften the glass, whose material rebuilds) whenever the
-// system flips Light/Dark.
+// Translucent wash between the frosted backdrop and the controls, so text stays
+// readable over a bright window behind the panel. A CGColor is a snapshot, so
+// re-resolve it whenever the system flips Light/Dark.
 final class Scrim: NSView {
   override init(frame: NSRect) {
     super.init(frame: frame)
@@ -224,53 +223,12 @@ final class Scrim: NSView {
   }
   required init?(coder: NSCoder) { fatalError() }
 
-  override func viewDidChangeEffectiveAppearance() {
-    apply()
-    guard let glass = window?.contentView else { return }
-    DispatchQueue.main.async { reduceGlassBlur(glass) }
-  }
+  override func viewDidChangeEffectiveAppearance() { apply() }
 
   private func apply() {
     let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
     layer?.backgroundColor = (dark ? NSColor.black : .white).withAlphaComponent(0.4).cgColor
   }
-}
-
-// Stock glass blurs the backdrop at inputBlurRadius 10, smearing whatever is
-// behind the panel into mush. Nothing on NSGlassEffectView exposes the radius, so
-// rebuild the private `glassBackground` CAFilter with a smaller one, copying every
-// other input. Mutating the committed filter does nothing (it's already with the
-// render server) — it must be built fresh and reassigned.
-// ponytail: private CoreAnimation API; a macOS update can rename the filter or its
-// inputs. Fails soft — no filter found means stock blur, nothing worse.
-func reduceGlassBlur(_ view: NSView, radius: Double = 3) {
-  guard let root = view.layer, let filterClass = NSClassFromString("CAFilter") as? NSObject.Type
-  else { return }
-  func visit(_ layer: CALayer) {
-    defer { layer.sublayers?.forEach(visit) }
-    guard String(describing: type(of: layer)) == "CABackdropLayer",
-      let filters = (layer as NSObject).value(forKey: "filters") as? [NSObject]
-    else { return }
-    let rebuilt = filters.map { filter -> NSObject in
-      guard "\(filter)" == "glassBackground",
-        let fresh = (filterClass as AnyObject).perform(
-          NSSelectorFromString("filterWithName:"), with: "glassBackground")?
-          .takeUnretainedValue() as? NSObject,
-        let inputs = filter.perform(NSSelectorFromString("inputKeys"))?
-          .takeUnretainedValue() as? [String]
-      else { return filter }
-      for key in inputs where key != "inputBlurRadius" {
-        if let v = filter.value(forKey: key) { fresh.setValue(v, forKey: key) }
-      }
-      fresh.setValue(radius, forKey: "inputBlurRadius")
-      return fresh
-    }
-    CATransaction.begin()
-    CATransaction.setDisableActions(true)
-    (layer as NSObject).setValue(rebuilt, forKey: "filters")
-    CATransaction.commit()
-  }
-  visit(root)
 }
 
 // MARK: Keyboard
@@ -686,7 +644,6 @@ final class Controller: NSObject, NSSoundDelegate {
   var call = "none"
   var callMuted: Bool { call == "muted" }
   var showAdvanced = false
-  var glass: NSView?
   var scrim: Scrim?
   var capture: Capture?
   var bhOut: BlackHoleOut?
@@ -1085,8 +1042,16 @@ final class Controller: NSObject, NSSoundDelegate {
     return true
   }
 
+  // Reading order on screen, top to bottom, then left to right within a row (as
+  // Tetherbug orders focus): the order controls are built in differs, e.g. the
+  // call row's Mute button is made after the mic popup.
   func moveFocus(_ step: Int) {
-    let live = focusables.filter { ($0.view as? NSControl)?.isEnabled ?? true }
+    guard let container = ring.superview else { return }
+    let frame = { (v: NSView) in v.convert(v.bounds, to: container) }
+    let live = focusables.filter { ($0.view as? NSControl)?.isEnabled ?? true }.sorted { a, b in
+      let fa = frame(a.view), fb = frame(b.view)
+      return abs(fa.midY - fb.midY) < 6 ? fa.minX < fb.minX : fa.midY > fb.midY
+    }
     guard !live.isEmpty else { return }
     if keyboardActive, let i = live.firstIndex(where: { $0.id == focusID }) {
       focusID = live[(i + step + live.count) % live.count].id
@@ -1289,54 +1254,35 @@ final class Controller: NSObject, NSSoundDelegate {
 
     let topLeft = NSPoint(x: panel.frame.minX, y: panel.frame.maxY)
     let frame = NSRect(origin: .zero, size: size)
-    // One glass for the panel's life, with only its content swapped: a fresh glass
-    // per rebuild drew a frame or two at the stock blur before reduceGlassBlur
-    // ran, so the panel's transparency flickered.
-    if let glass, let scrim {
-      scrim.subviews.forEach { $0.removeFromSuperview() }
-      scrim.addSubview(stack)
-      scrim.addSubview(ring)
-      panel.setContentSize(size)
-      glass.frame = frame
-      glass.layoutSubtreeIfNeeded()
-      reduceGlassBlur(glass)  // in case resizing rebuilt the backdrop's filter
-    } else {
-      let (glass, scrim) = backdrop(frame)
-      scrim.addSubview(stack)
-      scrim.addSubview(ring)
-      self.glass = glass
-      self.scrim = scrim
-      panel.setContentSize(size)
-      panel.contentView = glass
-      // The glass layer tree only exists after layout, so soften afterwards.
-      DispatchQueue.main.async { reduceGlassBlur(glass) }
-    }
+    // One backdrop for the panel's life, with only its content swapped.
+    let scrim = self.scrim ?? backdrop(frame)
+    scrim.subviews.forEach { $0.removeFromSuperview() }
+    scrim.addSubview(stack)
+    scrim.addSubview(ring)
+    panel.setContentSize(size)
     if panel.isVisible { panel.setFrameTopLeftPoint(topLeft) }
     showRing()
   }
 
-  // Liquid Glass (NSGlassEffectView, resolved at runtime — the nixpkgs SDK
-  // predates it) with a translucent scrim so text stays readable, as in hidewin-bar.
-  func backdrop(_ frame: NSRect) -> (NSView, Scrim) {
-    let scrim = Scrim(frame: frame)
-    scrim.autoresizingMask = [.width, .height]
-    if let cls = NSClassFromString("NSGlassEffectView") as? NSObject.Type,
-      let glass = cls.init() as? NSView
-    {
-      glass.frame = frame
-      glass.setValue(1, forKey: "style")
-      glass.setValue(16, forKey: "cornerRadius")
-      glass.setValue(scrim, forKey: "contentView")
-      return (glass, scrim)
-    }
+  // A frosted popover material, always drawn active, under a translucent scrim.
+  // Not Liquid Glass: its clear style turns far more transparent whenever the
+  // panel is the key window, which it is while it takes the keyboard, so the
+  // panel's look jumped with every click; the regular style squares off the
+  // corners when key. This material looks the same key or not.
+  func backdrop(_ frame: NSRect) -> Scrim {
     let vev = NSVisualEffectView(frame: frame)
-    vev.material = .menu
+    vev.material = .popover
     vev.state = .active
     vev.wantsLayer = true
     vev.layer?.cornerRadius = 16
     vev.layer?.masksToBounds = true
+    vev.autoresizingMask = [.width, .height]
+    let scrim = Scrim(frame: frame)
+    scrim.autoresizingMask = [.width, .height]
     vev.addSubview(scrim)
-    return (vev, scrim)
+    panel.contentView = vev
+    self.scrim = scrim
+    return scrim
   }
 
   @objc func muteClicked() { mute("toggle-mute") }
