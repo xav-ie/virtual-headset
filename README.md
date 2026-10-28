@@ -53,6 +53,15 @@ In your call app's settings, the headset shows up as two devices:
 **Virtual_Headset**, its mute button. Zoom pairs them because their names match,
 and from then on treats them as one headset.
 
+## What it does
+
+<!-- diagram:capabilities -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/capabilities-dark.svg">
+  <img src="docs/diagrams/capabilities.svg" alt="One app, everything around your mic. Around Virtual Headset, a headset made in software: Zoom and Meet (mute in sync, web or desktop); Any mic (built-in, USB or Bluetooth); Stereo while muted (Bluetooth headsets (macOS)); Nix modules (for NixOS and nix-darwin); Scriptable (CLI, D-Bus or state files); Firefox (via an extension (Linux)); Noise removed (on your own Mac (macOS)); Mute from anywhere (a key, your bar, a panel)">
+</picture>
+<!-- /diagram:capabilities -->
+
 ## Quick start
 
 **Linux, with NixOS:**

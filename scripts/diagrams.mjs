@@ -67,6 +67,7 @@ const style = (c) => `<style>
   .axis { font-size: ${SIZE.axis}px; fill: ${c.muted}; }
   .axis-strong { font-size: ${SIZE.axis}px; font-weight: 650; fill: ${c.text}; }
   .edge { fill: none; stroke: ${c.border}; stroke-width: 2; marker-end: url(#arrow); }
+  .spoke { stroke: ${c.line}; stroke-width: 2.5; }
   .tick { stroke: ${c.muted}; stroke-width: 1.5; stroke-dasharray: 4 4; }
   .tag { fill: ${c.bg}; }
   .arrowhead { fill: ${c.border}; }
@@ -85,7 +86,7 @@ const svg = (h, body) =>
     (theme) =>
       `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${n(h)}" width="${W}" height="${n(h)}" role="img">` +
       `${style(palette[theme])}<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="arrowhead" d="M0 0L10 5L0 10z"/></marker></defs>` +
-      `<rect class="bg" width="${W}" height="${n(h)}"/>${body}</svg>\n`,
+      `<rect class="bg" width="${W}" height="${n(h)}" rx="16"/>${body}</svg>\n`,
   );
 
 const text = (cls, x, y, s, anchor = "start") =>
@@ -113,6 +114,12 @@ const GLYPHS = {
     "M-16 -16h10a5 5 0 1 1 10 0h12v12a5 5 0 1 0 0 10v12h-12a5 5 0 1 1 -10 0h-10z",
   muted:
     "M-6 -20h12v18a6 6 0 0 1 -12 0zM-6 -20a6 6 0 0 1 12 0M-13 -4a13 13 0 0 0 26 0M0 9v11M-8 20h16M-18 -18L18 18",
+  wave: "M-22 0h4M-14 -8v16M-8 -16v32M-2 -6v12M4 -12v24M10 -4v8M16 -9v18M22 0h0",
+  bluetooth: "M-8 -9L8 7L0 15V-15L8 -7L-8 9",
+  terminal:
+    "M-23 -17h46a3 3 0 0 1 3 3v28a3 3 0 0 1 -3 3h-46a3 3 0 0 1 -3 -3v-28a3 3 0 0 1 3 -3zM-15 -6l7 6l-7 6M-2 7h12",
+  snowflake:
+    "M0 -20v40M-17 -10l34 20M-17 10l34 -20M-5 -16l5 5l5 -5M-5 16l5 -5l5 5",
 };
 const glyph = (name, x, y, live = false) =>
   `<path class="${live ? "ink-live" : "ink"}" transform="translate(${n(x)} ${n(y)})" d="${GLYPHS[name]}"/>`;
@@ -394,6 +401,63 @@ const diagrams = {
         link(from, call, { label: "mute" }) +
         link(call, to, { label: "muted" }),
       alt: "Mute from anywhere, and everything agrees. Press mute anywhere (a key, your menu or status bar, the panel, the Firefox toolbar, or Zoom or Meet's own button), and Zoom or Meet mutes: it's the one place mute is decided. It then shows everywhere: your menu or status bar, the panel, the Firefox toolbar, and Zoom or Meet",
+    };
+  },
+
+  // Everything it does, as spokes around it: eight capabilities evenly spaced
+  // on an ellipse around a larger hub, clockwise from the top.
+  capabilities() {
+    const h = headline(
+      "One app, everything around your mic",
+      "what Virtual Headset does for you, on Linux and macOS unless marked",
+    );
+    const [rx, ry, bw, bh] = [380, 172, 240, 96];
+    const [cx, cy] = [W / 2, h.top + ry + bh / 2];
+    const hub = {
+      x: cx - 130,
+      y: cy - 62,
+      w: 260,
+      h: 124,
+      ...headset,
+      text: ["Virtual Headset", "a headset made in software"],
+    };
+    const spokes = [
+      ["call", "Zoom and Meet", "mute in sync, web or desktop"],
+      ["mic", "Any mic", "built-in, USB or Bluetooth"],
+      ["bluetooth", "Stereo while muted", "Bluetooth headsets (macOS)"],
+      ["snowflake", "Nix modules", "for NixOS and nix-darwin"],
+      ["terminal", "Scriptable", "CLI, D-Bus or state files"],
+      ["puzzle", "Firefox", "via an extension (Linux)"],
+      ["wave", "Noise removed", "on your own Mac (macOS)"],
+      ["keyboard", "Mute from anywhere", "a key, your bar, a panel"],
+    ].map(([icon, title, sub], i) => {
+      const a = -Math.PI / 2 + (i * Math.PI) / 4;
+      const [x, y] = [cx + rx * Math.cos(a), cy + ry * Math.sin(a)];
+      return {
+        x: x - bw / 2,
+        y: y - bh / 2,
+        w: bw,
+        h: bh,
+        icon,
+        text: [title, sub],
+      };
+    });
+    return {
+      h: cy + ry + bh / 2 + 24,
+      body:
+        h.body +
+        // Spokes run center to center under the boxes, so each shows only between them.
+        spokes
+          .map(
+            (b) =>
+              `<line class="spoke" x1="${n(cx)}" y1="${n(cy)}" x2="${n(b.x + b.w / 2)}" y2="${n(b.y + b.h / 2)}"/>`,
+          )
+          .join("") +
+        // The hub's tint is translucent: back it so the spokes stop at its edge.
+        spokes.map(box).join("") +
+        rect("bg", hub.x, hub.y, hub.w, hub.h, 14) +
+        box(hub),
+      alt: `One app, everything around your mic. Around Virtual Headset, a headset made in software: ${spokes.map((b) => `${b.text[0]} (${b.text[1]})`).join("; ")}`,
     };
   },
 
