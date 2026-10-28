@@ -424,7 +424,7 @@ const diagrams = {
     const spokes = [
       ["call", "Zoom and Meet", "mute in sync, web or desktop"],
       ["mic", "Any mic", "built-in, USB or Bluetooth"],
-      ["bluetooth", "Stereo while muted", "Bluetooth headsets (macOS)"],
+      ["bluetooth", "Stereo while muted", "for Bluetooth headsets"],
       ["snowflake", "Nix modules", "for NixOS and nix-darwin"],
       ["terminal", "Scriptable", "CLI, D-Bus or state files"],
       ["puzzle", "Firefox", "via an extension"],

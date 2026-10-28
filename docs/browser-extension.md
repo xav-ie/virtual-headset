@@ -19,7 +19,7 @@ and Meet never see Virtual Headset. Without the extension:
   a Bluetooth headset stays in call audio.
 
 With it, a Firefox call behaves like any other: your mute key mutes the tab,
-muting in the tab updates everything else, and on a Mac you hear stereo while
+muting in the tab updates everything else, and you hear stereo while
 you're muted.
 
 ## How it works
