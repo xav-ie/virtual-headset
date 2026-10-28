@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// Propagate the changesets-managed version (root package.json) into the
-// WebExtension manifest, which is the Nix package's version source of truth
-// (packages/virtual-headset-firefox/default.nix reads it via lib.importJSON).
+// Copy the release version (root package.json, which knope bumps) into the
+// WebExtension manifest, which the Nix package reads
+// (packages/virtual-headset-firefox/default.nix, via lib.importJSON). knope.toml's
+// prepare-release runs this.
 //
 // Regex-replace the top-level "version" field so the manifest's formatting and
 // key order are preserved. The pattern does NOT match "manifest_version" (the
