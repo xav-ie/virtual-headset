@@ -8,21 +8,29 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions: {}
+
 jobs:
   check:
     runs-on: ubuntu-22.04
+    timeout-minutes: 60
     permissions:
       contents: read
-      id-token: write
+      id-token: write # the Nix installer's FlakeHub login
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # The NixOS VM tests (modules / runtime / extension) boot QEMU, so the
       # runner needs KVM access — and three NixOS closures overflow the default
-      # ~14 GB disk, so reclaim space first. (Both unnecessary for a pure-eval
-      # flake like xnixvim; required here because we run VM tests.)
+      # ~14 GB disk, so reclaim space first.
       - name: Free up disk space
-        uses: jlumbroso/free-disk-space@main
+        uses: jlumbroso/free-disk-space@ceedf095f4ec1a097402bc6bd80831f2e1a6fde6 # v2.0.0
         with:
           tool-cache: true
 
@@ -33,9 +41,9 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - uses: DeterminateSystems/nix-installer-action@main
-      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
+      - uses: DeterminateSystems/magic-nix-cache-action@84c0677f58dcedf3b91f8223ce36a9ea5b3c84b7 # v15
 
       # Builds all packages, runs the NixOS VM tests + TypeScript unit tests,
-      # and checks formatting.
+      # and checks formatting and the generated docs.
       - run: nix flake check --no-write-lock-file

@@ -1,109 +1,106 @@
 name: Release
 
-# Cut a release by pushing a `v*` tag (use `just release X.Y.Z`). This signs the
-# Firefox extension with Mozilla on the *unlisted* (self-distribution) channel —
-# AMO signs it in seconds with no human review, unlike the listed channel which
-# manual-reviews every nativeMessaging submission — then publishes the signed
-# .xpi plus an `updates.json` to the GitHub Release. Firefox installs the signed
-# build and auto-updates via the manifest's `update_url`, which points at this
-# release's `updates.json`.
-#
-# Requires two repo secrets (Mozilla AMO API key, https://addons.mozilla.org/developers/addon/api/key/):
-#   gh secret set AMO_JWT_ISSUER --repo xav-ie/virtual-headset
-#   gh secret set AMO_JWT_SECRET --repo xav-ie/virtual-headset
-
+# Runs when the release PR from prepare-release.yml merges, publishing the version in
+# package.json (and extension/static/manifest.json, which follows it):
+#   1. extension: builds the Firefox extension and signs it with Mozilla on the unlisted
+#      (self-distribution) channel, which signs in seconds with no human review, and writes
+#      updates.json, the update manifest installed copies poll through the extension's
+#      update_url (releases/latest/download/updates.json).
+#   2. release: knope tags v<version> and creates the GitHub release with CHANGELOG.md's notes,
+#      virtual_headset.xpi and updates.json.
+# To retry one that failed part-way, re-run its failed jobs from the run's page: Mozilla won't
+# sign the same version twice, so a re-run of a signed extension job fails.
 on:
-  push:
-    tags:
-      - "v*"
+  pull_request:
+    types: [closed]
+    branches: [main]
+  workflow_dispatch:
 
-permissions:
-  contents: write
+# One release at a time; never cancel one half-way through publishing.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions: {}
 
 jobs:
-  release:
-    runs-on: ubuntu-22.04
+  extension:
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged && github.head_ref == 'release')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      sha: ${{ steps.version.outputs.sha }}
     steps:
-      - uses: actions/checkout@v5
-
-      - uses: DeterminateSystems/nix-installer-action@main
-      - uses: DeterminateSystems/magic-nix-cache-action@main
-
-      # The tag drives the version; manifest.json is the source of truth, so they
-      # must agree (the `just release` recipe keeps them in sync — fail loudly if
-      # a tag was pushed by hand without bumping the manifest).
-      - name: Resolve and check version
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+      - name: Read and check the version
         id: version
         run: |
-          tag="${GITHUB_REF_NAME}"
-          version="${tag#v}"
-          manifest_version="$(nix run nixpkgs#jq -- -r .version extension/static/manifest.json)"
-          if [ "$version" != "$manifest_version" ]; then
-            echo "::error::tag $tag (=> $version) does not match manifest.json version $manifest_version" >&2
+          VERSION="$(jq -r .version package.json)"
+          MANIFEST="$(jq -r .version extension/static/manifest.json)"
+          if [ "$VERSION" != "$MANIFEST" ]; then
+            echo "::error::package.json is $VERSION but extension/static/manifest.json is $MANIFEST"
             exit 1
           fi
-          echo "tag=$tag" >>"$GITHUB_OUTPUT"
-          echo "version=$version" >>"$GITHUB_OUTPUT"
-
-      # Build the unpacked extension (static assets + esbuild-bundled JS).
-      - name: Build extension
-        run: nix build .#virtual-headset-firefox
-
-      # Sign on the unlisted channel. web-ext zips the source dir, uploads to AMO,
-      # waits for signing, and writes the signed .xpi to web-ext-artifacts/.
-      - name: Sign extension (Mozilla, unlisted)
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Build and sign (Mozilla, unlisted)
         env:
           AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
           AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
         run: |
-          # web-ext writes a `.amo-upload-uuid` marker into the source dir, so it
-          # must be writable — but the Nix build output lives in the read-only
-          # store. Sign from a writable copy.
-          rm -rf ext-src
-          cp -rL result/share/virtual-headset-firefox/extension ext-src
-          chmod -R u+w ext-src
-          nix run nixpkgs#web-ext -- sign \
-            --channel=unlisted \
-            --api-key="$AMO_JWT_ISSUER" \
-            --api-secret="$AMO_JWT_SECRET" \
-            --source-dir=ext-src \
-            --artifacts-dir=web-ext-artifacts
-          # Stable asset name so the manifest update_url / force-install URL never
-          # change across releases.
-          signed="$(find web-ext-artifacts -name '*.xpi' -print -quit)"
-          if [ -z "$signed" ]; then
-            echo "::error::web-ext produced no signed .xpi" >&2
-            exit 1
-          fi
-          cp "$signed" virtual_headset.xpi
-
-      # Firefox update manifest. The update_link points at this tag's versioned
-      # asset; the manifest's update_url (latest/download/updates.json) always
-      # resolves to the newest release's copy of this file.
-      - name: Generate updates.json
-        run: |
-          version="${{ steps.version.outputs.version }}"
-          tag="${{ steps.version.outputs.tag }}"
-          cat >updates.json <<EOF
-          {
-            "addons": {
-              "virtual-headset@local": {
-                "updates": [
-                  {
-                    "version": "$version",
-                    "update_link": "https://github.com/${GITHUB_REPOSITORY}/releases/download/$tag/virtual_headset.xpi"
-                  }
-                ]
-              }
-            }
-          }
-          EOF
-
-      - name: Publish GitHub Release
+          nix build .#virtual-headset-firefox
+          # web-ext writes a marker into the source dir, and the build lives in the read-only
+          # store, so it signs from a writable copy.
+          cp -rL result/share/virtual-headset-firefox/extension "$RUNNER_TEMP/extension"
+          chmod -R u+w "$RUNNER_TEMP/extension"
+          nix run nixpkgs#web-ext -- sign --channel=unlisted \
+            --api-key="$AMO_JWT_ISSUER" --api-secret="$AMO_JWT_SECRET" \
+            --source-dir="$RUNNER_TEMP/extension" --artifacts-dir="$RUNNER_TEMP/signed"
+          signed="$(find "$RUNNER_TEMP/signed" -name '*.xpi' -print -quit)"
+          if [ -z "$signed" ]; then echo "::error::web-ext produced no signed .xpi"; exit 1; fi
+          mkdir -p "$RUNNER_TEMP/artifacts"
+          # A fixed name, so force-install and update URLs never change between releases.
+          cp "$signed" "$RUNNER_TEMP/artifacts/virtual_headset.xpi"
+      - name: Write updates.json
         env:
-          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          gh release create "${{ steps.version.outputs.tag }}" \
-            virtual_headset.xpi updates.json \
-            --title "${{ steps.version.outputs.tag }}" \
-            --generate-notes
+          jq -n --arg version "$VERSION" \
+            --arg link "https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSION/virtual_headset.xpi" \
+            '{addons: {"virtual-headset@local": {updates: [{version: $version, update_link: $link}]}}}' \
+            > "$RUNNER_TEMP/artifacts/updates.json"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: extension
+          path: ${{ runner.temp }}/artifacts/*
+
+  # Tags v<version> and creates the GitHub release with CHANGELOG.md's notes and the assets.
+  release:
+    needs: [extension]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write # tag and create the GitHub release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.extension.outputs.sha }}
+          fetch-depth: 0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: extension
+          path: artifacts
+      - uses: knope-dev/action@19617851f9f13ab2f27a05989c55efb18aca3675 # v2.1.2
+        with:
+          version: 0.23.0
+      - name: Create GitHub release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: knope release --verbose

@@ -96,30 +96,39 @@ node scripts/screenshots.mjs    # assets/panel/*.png and assets/screenshot.png (
 
 ## Releases
 
-Releases are driven by [changesets](https://github.com/changesets/changesets) and
-signed in CI.
+Releases are cut by [knope](https://knope.tech) and signed in CI.
 
-- **Per change:** `just changeset`, and commit the file it writes.
-- **To ship:** [`version.yml`](../.github/workflows/version.yml) keeps a "chore:
-  version packages" pull request open that bumps the version, syncs it into the
-  extension's `manifest.json` and writes `CHANGELOG.md`. Merging it tags
-  `v<version>`, and [`release.yml`](../.github/workflows/release.yml) signs the
-  Firefox extension on Mozilla's unlisted channel and publishes
-  `virtual_headset.xpi` and `updates.json` to a GitHub release, which installed
-  copies update from. `just release` does the bump and tag locally instead.
+1. **Per change:** `just change` (`knope document-change`) asks for the kind of
+   change and a summary, and writes `.changeset/<name>.md`; commit it with the
+   change. That summary becomes the change's entry in `CHANGELOG.md`.
+2. **Every push to main:**
+   [`prepare-release.yml`](../.github/workflows/prepare-release.yml) keeps one
+   "chore: prepare release" pull request open. It bumps the version in
+   `package.json` (and the extension's `manifest.json`, which follows it), adds
+   the notes to `CHANGELOG.md`, and removes the change files. Each run rebuilds
+   it from main, so it's never stale. Run the workflow by hand to choose the
+   version yourself; before 1.0, knope bumps a feature as a patch.
+3. **Merging it:** [`release.yml`](../.github/workflows/release.yml) builds the
+   Firefox extension and signs it on Mozilla's unlisted channel, writes
+   `updates.json`, then tags `v<version>` and publishes the GitHub release with
+   the changelog, `virtual_headset.xpi` and `updates.json`. Installed copies
+   update from that `updates.json`.
+
+`nix flake check` and the Lint workflow (actionlint, shellcheck, zizmor) gate
+every pull request; Security runs CodeQL and dependency review while the
+repository is public.
 
 <details>
-<summary><b>One-time setup: repository secrets</b></summary>
+<summary><b>One-time setup</b></summary>
 
 ```sh
 # Mozilla add-ons API key (https://addons.mozilla.org/developers/addon/api/key/), to sign the .xpi
 gh secret set AMO_JWT_ISSUER --repo xav-ie/virtual-headset
 gh secret set AMO_JWT_SECRET --repo xav-ie/virtual-headset
-
-# A GitHub App with Contents and Pull requests read/write, installed on the repo:
-# version.yml acts as it so its tag push can start release.yml.
-gh secret set APP_ID --repo xav-ie/virtual-headset --body "<app id>"
-gh secret set APP_PRIVATE_KEY --repo xav-ie/virtual-headset < /path/to/key.pem
 ```
+
+In the repository's **Settings → Actions → General**, turn on **Allow GitHub
+Actions to create and approve pull requests**, so prepare-release can open the
+release pull request.
 
 </details>

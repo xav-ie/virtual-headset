@@ -7,31 +7,11 @@ default:
 check:
     nix flake check
 
-# add a changeset describing your change (run before opening a PR). On merge to
-# main the Version PR (.github/workflows/version.yml) consumes these into a
-# version bump + CHANGELOG.
-changeset:
-    npm run changeset
-
-# local alternative to the Version PR: consume pending changesets, bump + sync
-# the version, commit, push, then tag. The `v*` tag triggers release.yml, which
-# signs the extension with Mozilla (web-ext sign --channel=unlisted) and
-# publishes the signed .xpi + updates.json to GitHub Releases.
-release:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -n "$(git status --porcelain)" ]; then
-      echo "error: working tree is dirty; commit or stash first" >&2
-      exit 1
-    fi
-    # changeset version (bump + CHANGELOG) -> sync manifest.json -> refresh lock.
-    npm run version
-    git add package.json package-lock.json CHANGELOG.md \
-      extension/static/manifest.json .changeset
-    git commit -m "chore: version packages"
-    git push
-    # tag-release.mjs creates v<version> and pushes it (idempotent).
-    npm run tag
+# note a change for the next release (run before opening a PR). Every push to
+# main keeps a "chore: prepare release" PR up to date from these notes, and
+# merging it publishes the release (.github/workflows/{prepare-release,release}.yml).
+change:
+    knope document-change
 
 # show flake outputs
 show:
