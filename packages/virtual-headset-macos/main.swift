@@ -208,12 +208,11 @@ final class Headset {
   }
 }
 
-// MARK: Glass
+// MARK: Backdrop
 
-// Translucent wash between the glass and the controls: .clear glass alone leaves
-// text unreadable over a bright window behind the panel. A CGColor is a snapshot,
-// so re-resolve it (and re-soften the glass, whose material rebuilds) whenever the
-// system flips Light/Dark.
+// Translucent wash between the frosted backdrop and the controls, so text stays
+// readable over a bright window behind the panel. A CGColor is a snapshot, so
+// re-resolve it whenever the system flips Light/Dark.
 final class Scrim: NSView {
   override init(frame: NSRect) {
     super.init(frame: frame)
@@ -224,11 +223,7 @@ final class Scrim: NSView {
   }
   required init?(coder: NSCoder) { fatalError() }
 
-  override func viewDidChangeEffectiveAppearance() {
-    apply()
-    guard let glass = window?.contentView else { return }
-    DispatchQueue.main.async { reduceGlassBlur(glass) }
-  }
+  override func viewDidChangeEffectiveAppearance() { apply() }
 
   private func apply() {
     let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
@@ -236,41 +231,46 @@ final class Scrim: NSView {
   }
 }
 
-// Stock glass blurs the backdrop at inputBlurRadius 10, smearing whatever is
-// behind the panel into mush. Nothing on NSGlassEffectView exposes the radius, so
-// rebuild the private `glassBackground` CAFilter with a smaller one, copying every
-// other input. Mutating the committed filter does nothing (it's already with the
-// render server) — it must be built fresh and reassigned.
-// ponytail: private CoreAnimation API; a macOS update can rename the filter or its
-// inputs. Fails soft — no filter found means stock blur, nothing worse.
-func reduceGlassBlur(_ view: NSView, radius: Double = 3) {
-  guard let root = view.layer, let filterClass = NSClassFromString("CAFilter") as? NSObject.Type
-  else { return }
-  func visit(_ layer: CALayer) {
-    defer { layer.sublayers?.forEach(visit) }
-    guard String(describing: type(of: layer)) == "CABackdropLayer",
-      let filters = (layer as NSObject).value(forKey: "filters") as? [NSObject]
-    else { return }
-    let rebuilt = filters.map { filter -> NSObject in
-      guard "\(filter)" == "glassBackground",
-        let fresh = (filterClass as AnyObject).perform(
-          NSSelectorFromString("filterWithName:"), with: "glassBackground")?
-          .takeUnretainedValue() as? NSObject,
-        let inputs = filter.perform(NSSelectorFromString("inputKeys"))?
-          .takeUnretainedValue() as? [String]
-      else { return filter }
-      for key in inputs where key != "inputBlurRadius" {
-        if let v = filter.value(forKey: key) { fresh.setValue(v, forKey: key) }
-      }
-      fresh.setValue(radius, forKey: "inputBlurRadius")
-      return fresh
-    }
-    CATransaction.begin()
-    CATransaction.setDisableActions(true)
-    (layer as NSObject).setValue(rebuilt, forKey: "filters")
-    CATransaction.commit()
+// MARK: Keyboard
+
+// A popup that takes the keyboard while it's open: as a plain non-activating panel
+// it never became key, so keys went to the app behind it. Key presses reach `onKey`
+// first; a click hands control back to the mouse (`onClick`).
+final class PopupPanel: NSPanel {
+  var onKey: ((NSEvent) -> Bool)?
+  var onClick: (() -> Void)?
+  override var canBecomeKey: Bool { true }
+  override func sendEvent(_ event: NSEvent) {
+    if event.type == .keyDown, onKey?(event) == true { return }
+    if event.type == .leftMouseDown { onClick?() }
+    super.sendEvent(event)
   }
-  visit(root)
+}
+
+// The keyboard focus ring: a 2 pt outline 4 pt outside the focused control, in the
+// label color (Tetherbug's :focus-visible ring). Drawn by us, because AppKit only
+// lets buttons, popups and sliders take focus with macOS's Keyboard navigation
+// setting on; never hit-tested.
+final class FocusRing: NSView {
+  override init(frame: NSRect) {
+    super.init(frame: frame)
+    wantsLayer = true
+    layer?.borderWidth = 2
+    isHidden = true
+    setAccessibilityElement(false)
+  }
+  required init?(coder: NSCoder) { fatalError() }
+  override func hitTest(_ point: NSPoint) -> NSView? { nil }
+  override func updateLayer() { layer?.borderColor = NSColor.labelColor.cgColor }
+  override var wantsUpdateLayer: Bool { true }
+
+  func show(around view: NSView, in container: NSView) {
+    let r = view.convert(view.bounds, to: container).insetBy(dx: -4, dy: -4)
+    frame = r
+    layer?.cornerRadius = min(r.height / 2, 10)
+    isHidden = false
+    needsDisplay = true
+  }
 }
 
 // MARK: Engine
@@ -357,6 +357,15 @@ final class Capture: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate {
       self.take = Data()
       self.takeBytes = Int(48000 * 4 * seconds)
       self.takeDone = done
+    }
+  }
+
+  // Ends the take in progress early, handing over what it has so far.
+  func finishTake() {
+    queue.async {
+      guard let t = self.take, let done = self.takeDone else { return }
+      self.take = nil
+      DispatchQueue.main.async { done(t) }
     }
   }
 
@@ -597,7 +606,11 @@ final class Post {
 }
 
 final class Controller: NSObject, NSSoundDelegate {
-  let defaults = UserDefaults.standard
+  let defaults: UserDefaults
+  // A screenshot controller only draws the panel: no devices, audio or listeners.
+  let live: Bool
+  // Overrides the meter for screenshots, where no mic is open.
+  var shownLevel: Double?
   // Noise suppression on top of forwarding; off passes the mic through untouched.
   // Kept under the "enabled" key so existing settings carry over.
   var denoise: Bool {
@@ -640,6 +653,7 @@ final class Controller: NSObject, NSSoundDelegate {
   var call = "none"
   var callMuted: Bool { call == "muted" }
   var showAdvanced = false
+  var scrim: Scrim?
   var capture: Capture?
   var bhOut: BlackHoleOut?
   var deepFilter: DeepFilter?
@@ -653,6 +667,10 @@ final class Controller: NSObject, NSSoundDelegate {
   // A/B test: record the raw mic once, then render it through the CURRENT settings
   // on every "Denoised" play — so you can tweak the gate and re-listen to one take.
   var recording = false
+  // When the take in progress ends; the Record button counts down to it.
+  var recordingEnds: Date?
+  var takeSource: Capture?
+  weak var recordButton: NSButton?
   var sound: NSSound?
   var playing: String?  // key into `takes`
   let playhead = NSSlider(value: 0, minValue: 0, maxValue: 1, target: nil, action: nil)
@@ -665,16 +683,25 @@ final class Controller: NSObject, NSSoundDelegate {
     "out": NSTemporaryDirectory() + "virtual-headset-out.wav",
   ]
 
-  let panel = NSPanel(
+  let panel = PopupPanel(
     contentRect: NSRect(x: 0, y: 0, width: Controller.width, height: 40),
     styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+  // Keyboard navigation, independent of macOS's setting (see FocusRing): the panel's
+  // controls in reading order, rebuilt with it; focus is kept by id across rebuilds.
+  var focusables: [(id: String, view: NSView)] = []
+  var focusID: String?
+  var keyboardActive = false
+  let ring = FocusRing(frame: .zero)
   var clickMonitor: Any?
   var lastMonitorClose: Date?
 
-  override init() {
+  init(live: Bool = true) {
+    self.live = live
+    // Screenshots keep their settings in a throwaway domain, never the user's.
+    defaults = live ? .standard : UserDefaults(suiteName: "com.github.virtual-headset.screenshot")!
     super.init()
     // Settings saved under the agent's previous bundle id carry over once.
-    if defaults.object(forKey: "migrated") == nil,
+    if live, defaults.object(forKey: "migrated") == nil,
       let old = UserDefaults(suiteName: "com.x.mic-denoise")
     {
       for k in ["enabled", "input", "auto", "model", "mix", "gate"] {
@@ -687,6 +714,13 @@ final class Controller: NSObject, NSSoundDelegate {
     panel.hidesOnDeactivate = false
     panel.backgroundColor = .clear
     panel.isOpaque = false
+    panel.setAccessibilityLabel("Virtual Headset")
+    panel.onKey = { [weak self] e in self?.key(e) ?? false }
+    panel.onClick = { [weak self] in
+      self?.keyboardActive = false
+      self?.ring.isHidden = true
+    }
+    guard live else { return }
 
     DistributedNotificationCenter.default().addObserver(forName: TOGGLE, object: nil, queue: .main)
     {
@@ -722,6 +756,7 @@ final class Controller: NSObject, NSSoundDelegate {
       guard let self, self.panel.isVisible else { return }
       self.updateMeter()
       self.updatePlayhead()
+      self.updateRecordButton()
     }
     // ponytail: 1 s poll of process objects; listen to kAudioProcessPropertyIsRunningInput
     // per process if start-up lag ever matters.
@@ -971,7 +1006,10 @@ final class Controller: NSObject, NSSoundDelegate {
     if x > scr.frame.width { x /= scr.backingScaleFactor }  // sketchybar reports device px
     x = min(max(scr.frame.minX + 4, x), scr.frame.maxX - panel.frame.width - 4)
     panel.setFrameTopLeftPoint(NSPoint(x: x, y: scr.visibleFrame.maxY - 2))
+    keyboardActive = false
+    focusID = nil
     panel.orderFrontRegardless()
+    panel.makeKey()
     clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) {
       [weak self] _ in
       self?.lastMonitorClose = Date()
@@ -985,6 +1023,77 @@ final class Controller: NSObject, NSSoundDelegate {
       NSEvent.removeMonitor(m)
       clickMonitor = nil
     }
+  }
+
+  // Registers a control for keyboard navigation, in the order the panel is built.
+  @discardableResult
+  func focusable<V: NSView>(_ id: String, _ view: V) -> V {
+    focusables.append((id, view))
+    return view
+  }
+
+  var focused: NSView? { focusables.first { $0.id == focusID }?.view }
+
+  // Tab / Shift-Tab and the up/down arrows move focus; Space / Return activate;
+  // left/right nudge a slider; Escape and ⌘W close, like any popup.
+  func key(_ e: NSEvent) -> Bool {
+    let shift = e.modifierFlags.contains(.shift)
+    switch e.keyCode {
+    case 53: closePanel()  // Escape
+    case 13 where e.modifierFlags.contains(.command): closePanel()  // ⌘W
+    case 48: moveFocus(shift ? -1 : 1)  // Tab
+    case 125: moveFocus(1)  // down
+    case 126: moveFocus(-1)  // up
+    case 49, 36, 76:  // Space, Return, Enter
+      guard keyboardActive, let v = focused else { return false }
+      activate(v)
+    case 123, 124:  // left, right
+      guard keyboardActive, let s = focused as? NSSlider else { return false }
+      s.doubleValue += (s.maxValue - s.minValue) / 20 * (e.keyCode == 124 ? 1 : -1)
+      s.sendAction(s.action, to: s.target)
+    default: return false
+    }
+    return true
+  }
+
+  // Reading order on screen, top to bottom, then left to right within a row (as
+  // Tetherbug orders focus): the order controls are built in differs, e.g. the
+  // call row's Mute button is made after the mic popup.
+  func moveFocus(_ step: Int) {
+    guard let container = ring.superview else { return }
+    let frame = { (v: NSView) in v.convert(v.bounds, to: container) }
+    let live = focusables.filter { ($0.view as? NSControl)?.isEnabled ?? true }.sorted { a, b in
+      let fa = frame(a.view), fb = frame(b.view)
+      return abs(fa.midY - fb.midY) < 6 ? fa.minX < fb.minX : fa.midY > fb.midY
+    }
+    guard !live.isEmpty else { return }
+    if keyboardActive, let i = live.firstIndex(where: { $0.id == focusID }) {
+      focusID = live[(i + step + live.count) % live.count].id
+    } else {
+      focusID = (step > 0 ? live.first : live.last)?.id
+    }
+    keyboardActive = true
+    showRing()
+  }
+
+  func activate(_ v: NSView) {
+    switch v {
+    case let s as NSSwitch:
+      s.state = s.state == .on ? .off : .on
+      s.sendAction(s.action, to: s.target)
+    case let c as NSControl: c.performClick(nil)  // buttons, checkboxes, popups
+    default: break
+    }
+  }
+
+  func showRing() {
+    guard keyboardActive, let v = focused, let container = ring.superview else {
+      ring.isHidden = true
+      return
+    }
+    container.layoutSubtreeIfNeeded()
+    ring.show(around: v, in: container)
+    NSAccessibility.post(element: v, notification: .focusedUIElementChanged)
   }
 
   func label(_ s: String, size: CGFloat = 12, secondary: Bool = false) -> NSTextField {
@@ -1020,6 +1129,13 @@ final class Controller: NSObject, NSSoundDelegate {
 
   // Label column + control column, so every control starts at the same x.
   func grid(_ rows: [(String, NSView)]) -> NSGridView {
+    // VoiceOver names a row's popup, slider or meter after the row's title.
+    for (title, view) in rows where !title.isEmpty {
+      let control = ([view] + view.subviews).first {
+        $0 is NSPopUpButton || $0 is NSSlider || $0 is NSLevelIndicator
+      }
+      control?.setAccessibilityLabel(title)
+    }
     let g = NSGridView(views: rows.map { [label($0.0), $0.1] })
     g.columnSpacing = 10
     g.rowSpacing = 8
@@ -1041,9 +1157,10 @@ final class Controller: NSObject, NSSoundDelegate {
     state.font = .systemFont(ofSize: 15, weight: .semibold)
     let glyph =
       callMuted ? symbol("mic.slash.fill", .secondaryLabelColor) : symbol("mic.fill", .systemRed)
-    let b = NSButton(
-      title: callMuted ? "Unmute" : "Mute", target: self, action: #selector(muteClicked))
+    let b = focusable("mute", NSButton(
+      title: callMuted ? "Unmute" : "Mute", target: self, action: #selector(muteClicked)))
     b.bezelStyle = .rounded
+    b.setAccessibilityLabel(callMuted ? "Unmute the call" : "Mute the call")
     return NSStackView(views: [glyph, state, NSView(), b])
   }
 
@@ -1052,14 +1169,16 @@ final class Controller: NSObject, NSSoundDelegate {
       image: NSImage(systemSymbolName: name, accessibilityDescription: nil)!
         .withSymbolConfiguration(.init(pointSize: 15, weight: .semibold))!)
     v.contentTintColor = tint
+    v.setAccessibilityElement(false)  // decoration: the state is spelled out beside it
     return v
   }
 
   // Call mute first, then the mic it forwards, then noise suppression (an add-on on
   // top of forwarding, with its own A/B test); the setup hint only outside calls.
   func buildContent() {
+    focusables = []
     let mics = devices().filter { $0.isInput && $0.uid != OUT_UID }
-    let micPop = NSPopUpButton()
+    let micPop = focusable("input", NSPopUpButton())
     // "Default" alone: the status line below names the mic actually in use.
     micPop.addItem(withTitle: "Default")
     micPop.lastItem?.representedObject = ""
@@ -1071,11 +1190,9 @@ final class Controller: NSObject, NSSoundDelegate {
     micPop.target = self
     micPop.action = #selector(micPicked(_:))
 
-    let autoBox = NSButton(
-      checkboxWithTitle: "Only while in use", target: self, action: #selector(autoToggled(_:)))
-    autoBox.state = auto ? .on : .off
 
-    let toggle = NSSwitch()
+    let toggle = focusable("denoise", NSSwitch())
+    toggle.setAccessibilityLabel("Noise suppression")
     toggle.controlSize = .small
     toggle.state = denoise ? .on : .off
     toggle.target = self
@@ -1086,26 +1203,43 @@ final class Controller: NSObject, NSSoundDelegate {
       separator(),
       heading("Microphone"),
       // The meter only means something while the mic is open.
-      grid([("Input", micPop)] + (capture != nil ? [("Level", meterRow())] : []) + [("", autoBox)]),
+      grid([("Input", micPop)] + (capture != nil || shownLevel != nil ? [("Level", meterRow())] : [])),
       wrapping(status),
       separator(),
       NSStackView(views: [heading("Noise suppression"), NSView(), toggle]),
     ]
 
-    if denoise {
-      views.append(grid([("Strength", strengthRow()), ("Test", testRow())]))
-      // The benchmarks favour DeepFilterNet everywhere and the gate costs speech
-      // quality, so the engine and gate sit behind a disclosure.
-      let disclose = NSButton(
-        title: "Advanced", target: self, action: #selector(advancedToggled(_:)))
-      disclose.setButtonType(.pushOnPushOff)
-      disclose.bezelStyle = .disclosure
-      disclose.state = showAdvanced ? .on : .off
-      disclose.title = ""
-      let advLabel = label("Advanced", size: 12, secondary: true)
-      views.append(NSStackView(views: [disclose, advLabel, NSView()]))
-      if showAdvanced {
-        let modelPop = NSPopUpButton()
+    if denoise { views.append(grid([("Strength", strengthRow()), ("Test", testRow())])) }
+
+    // Settings almost nobody should change: keeping the mic open, and (the
+    // benchmarks favour DeepFilterNet everywhere, the gate costs speech quality)
+    // the engine and gate. A plain chevron, not a disclosure bezel: the panel
+    // rebuilds on every click, which cut the bezel's arrow animation short.
+    let chevron = NSImage(
+      systemSymbolName: showAdvanced ? "chevron.down" : "chevron.right",
+      accessibilityDescription: nil)!
+      .withSymbolConfiguration(.init(pointSize: 10, weight: .semibold))!
+    let disclose = focusable("advanced", NSButton(
+      title: "Advanced", image: chevron, target: self, action: #selector(advancedToggled)))
+    disclose.setAccessibilityExpanded(showAdvanced)
+    disclose.isBordered = false
+    disclose.imagePosition = .imageLeading
+    disclose.contentTintColor = .secondaryLabelColor
+    disclose.font = .systemFont(ofSize: 12)
+    views += [separator(), NSStackView(views: [disclose, NSView()])]
+    if showAdvanced {
+      let keepOpen = focusable("keep-open", NSButton(
+        checkboxWithTitle: "Keep the mic open between calls", target: self,
+        action: #selector(autoToggled(_:))))
+      keepOpen.state = auto ? .off : .on
+      views += [
+        keepOpen,
+        wrapping(
+          "Calls start a moment sooner, but your mic stays in use, and Bluetooth headsets in hands-free audio, even when nothing is listening."
+        ),
+      ]
+      if denoise {
+        let modelPop = focusable("model", NSPopUpButton())
         for m in MODELS {
           modelPop.addItem(withTitle: m.label)
           modelPop.lastItem?.representedObject = m.key
@@ -1133,41 +1267,41 @@ final class Controller: NSObject, NSSoundDelegate {
     stack.frame = NSRect(origin: .zero, size: size)
 
     let topLeft = NSPoint(x: panel.frame.minX, y: panel.frame.maxY)
+    let frame = NSRect(origin: .zero, size: size)
+    // One backdrop for the panel's life, with only its content swapped.
+    let scrim = self.scrim ?? backdrop(frame)
+    scrim.subviews.forEach { $0.removeFromSuperview() }
+    scrim.addSubview(stack)
+    scrim.addSubview(ring)
     panel.setContentSize(size)
-    let glass = backdrop(NSRect(origin: .zero, size: size), stack)
-    panel.contentView = glass
-    // The glass layer tree only exists after layout, so soften afterwards.
-    DispatchQueue.main.async { reduceGlassBlur(glass) }
     if panel.isVisible { panel.setFrameTopLeftPoint(topLeft) }
+    showRing()
   }
 
-  // Liquid Glass (NSGlassEffectView, resolved at runtime — the nixpkgs SDK
-  // predates it) with a translucent scrim so text stays readable, as in hidewin-bar.
-  func backdrop(_ frame: NSRect, _ content: NSView) -> NSView {
-    let scrim = Scrim(frame: frame)
-    scrim.addSubview(content)
-    if let cls = NSClassFromString("NSGlassEffectView") as? NSObject.Type,
-      let glass = cls.init() as? NSView
-    {
-      glass.frame = frame
-      glass.setValue(1, forKey: "style")
-      glass.setValue(16, forKey: "cornerRadius")
-      glass.setValue(scrim, forKey: "contentView")
-      return glass
-    }
+  // A frosted popover material, always drawn active, under a translucent scrim.
+  // Not Liquid Glass: its clear style turns far more transparent whenever the
+  // panel is the key window, which it is while it takes the keyboard, so the
+  // panel's look jumped with every click; the regular style squares off the
+  // corners when key. This material looks the same key or not.
+  func backdrop(_ frame: NSRect) -> Scrim {
     let vev = NSVisualEffectView(frame: frame)
-    vev.material = .menu
+    vev.material = .popover
     vev.state = .active
     vev.wantsLayer = true
     vev.layer?.cornerRadius = 16
     vev.layer?.masksToBounds = true
+    vev.autoresizingMask = [.width, .height]
+    let scrim = Scrim(frame: frame)
+    scrim.autoresizingMask = [.width, .height]
     vev.addSubview(scrim)
-    return vev
+    panel.contentView = vev
+    self.scrim = scrim
+    return scrim
   }
 
   @objc func muteClicked() { mute("toggle-mute") }
-  @objc func advancedToggled(_ b: NSButton) {
-    showAdvanced = b.state == .on
+  @objc func advancedToggled() {
+    showAdvanced.toggle()
     buildContent()
   }
 
@@ -1200,7 +1334,7 @@ final class Controller: NSObject, NSSoundDelegate {
   // off, warning == critical: a warning above critical would invert the colours.
   var meterWarning: Double { gate > GATE_OFF ? gate : -3 }
   func updateMeter() {
-    let v = capture == nil ? -Double.infinity : level
+    let v = shownLevel ?? (capture == nil ? -Double.infinity : level)
     meter.doubleValue = max(GATE_OFF, v)
     meterText.stringValue = v.isFinite ? "\(Int(v.rounded())) dB" : "—"
   }
@@ -1211,9 +1345,9 @@ final class Controller: NSObject, NSSoundDelegate {
   func strengthRow() -> NSView {
     let dfn = model == "dfn"
     let top = dfn ? 0.4 : 1
-    let s = NSSlider(
+    let s = focusable("strength", NSSlider(
       value: min(mix, top), minValue: 0, maxValue: top, target: self,
-      action: #selector(mixChanged(_:)))
+      action: #selector(mixChanged(_:))))
     s.isContinuous = false
     let text = !dfn ? "\(Int(mix * 100))%" : mix >= top ? "Max" : "\(Int(mix * 100)) dB"
     return NSStackView(views: [s, valueLabel(text)])
@@ -1229,9 +1363,9 @@ final class Controller: NSObject, NSSoundDelegate {
   }
 
   func gateRow() -> NSView {
-    let s = NSSlider(
+    let s = focusable("gate", NSSlider(
       value: gate, minValue: GATE_OFF, maxValue: -10, target: self,
-      action: #selector(gateChanged(_:)))
+      action: #selector(gateChanged(_:))))
     s.isContinuous = true  // the gate is live: no restart, so track the drag
     return NSStackView(views: [s, valueLabel(gate > GATE_OFF ? "\(Int(gate)) dB" : "Off", gateText)])
   }
@@ -1244,14 +1378,15 @@ final class Controller: NSObject, NSSoundDelegate {
       b.bezelStyle = .rounded
       b.imagePosition = .imageLeading
       b.isEnabled = enabled
-      return b
+      return focusable("test-\(title)", b)
     }
     let haveTakes = !recording && FileManager.default.fileExists(atPath: takes["raw"]!)
     // Record 8 s of raw mic, then play it as-is or through the current settings.
+    let recordButton = button("Record", "record.circle", #selector(record), enabled: true)
+    self.recordButton = recordButton
+    updateRecordButton()
     let buttons = NSStackView(views: [
-      button(
-        recording ? "8 s…" : "Record", "record.circle", #selector(record),
-        enabled: !recording && capture != nil),
+      recordButton,
       button(
         "Original", playing == "raw" ? "stop.fill" : "play.fill", #selector(playRaw),
         enabled: haveTakes),
@@ -1262,6 +1397,7 @@ final class Controller: NSObject, NSSoundDelegate {
     buttons.spacing = 4
     guard playing != nil else { return buttons }
     // Scrubbable playhead while a take plays.
+    focusable("playhead", playhead)
     playhead.controlSize = .small
     playhead.target = self
     playhead.action = #selector(seek(_:))
@@ -1272,6 +1408,21 @@ final class Controller: NSObject, NSSoundDelegate {
     col.alignment = .leading
     return col
   }
+  // "8 s", "7 s", … while a take records: whole seconds left, rounded up.
+  func updateRecordButton() {
+    guard let recordButton else { return }
+    guard recording, let end = recordingEnds else {
+      recordButton.title = "Record"
+      recordButton.image = NSImage(systemSymbolName: "record.circle", accessibilityDescription: nil)
+      return
+    }
+    // A stop button while recording: pressing it again ends the take early.
+    let left = Int(max(0, end.timeIntervalSinceNow).rounded(.up))
+    recordButton.title = "\(max(left, 1)) s"
+    recordButton.image = NSImage(systemSymbolName: "stop.fill", accessibilityDescription: nil)
+    recordButton.setAccessibilityLabel("Stop recording, \(left) seconds left")
+  }
+
   func updatePlayhead() {
     guard let sound, playing != nil else { return }
     playhead.maxValue = max(sound.duration, 0.1)
@@ -1279,13 +1430,34 @@ final class Controller: NSObject, NSSoundDelegate {
     playTime.stringValue = String(format: "%.1f s", sound.currentTime)
   }
   @objc func seek(_ s: NSSlider) { sound?.currentTime = s.doubleValue }
+  // Records from the live capture, or, while the mic is closed (between calls, or
+  // muted), opens the mic just for the take.
+  // Records 8 s; pressed again while recording, it stops and keeps the take so far.
   @objc func record() {
-    guard let capture else { return }
+    if recording {
+      takeSource?.finishTake()
+      return
+    }
+    var borrowed: Capture?
+    if capture == nil {
+      guard case .success(let cfg) = desired(), let c = Capture(uid: cfg.uid, sink: { _ in }) else {
+        status = "Can't open the mic to record"
+        buildContent()
+        return
+      }
+      borrowed = c
+    }
+    guard let source = capture ?? borrowed else { return }
     stopPlayback()
     recording = true
+    recordingEnds = Date().addingTimeInterval(8)
+    takeSource = source
     buildContent()
-    capture.record(seconds: 8) { [weak self] data in
+    source.record(seconds: 8) { [weak self] data in
+      borrowed?.stop()
+      borrowed = nil  // the take's callback held it
       guard let self else { return }
+      self.takeSource = nil
       try? data.write(to: URL(fileURLWithPath: self.takes["pcm"]!))
       self.render(self.takes["pcm"]!, self.takes["raw"]!, filters: nil)
       self.recording = false
@@ -1348,8 +1520,9 @@ final class Controller: NSObject, NSSoundDelegate {
     gateText.stringValue = gate > GATE_OFF ? "\(Int(gate)) dB" : "Off"
     meter.warningValue = meterWarning
   }
+  // The box reads "Keep the mic open", the inverse of `auto`.
   @objc func autoToggled(_ b: NSButton) {
-    auto = b.state == .on
+    auto = b.state == .off
     reconcile()
   }
   @objc func mixChanged(_ s: NSSlider) {
@@ -1359,9 +1532,47 @@ final class Controller: NSObject, NSSoundDelegate {
   }
 }
 
+// `virtual-headset screenshot <dir>`: the real panel in each state the docs show,
+// with sample values, as <dir>/<state>.png (scripts/screenshots.mjs). screencapture
+// only captures windows on screen, so each state flashes in the screen's corner.
+func screenshots(to dir: String) {
+  let c = Controller(live: false)
+  c.defaults.removePersistentDomain(forName: "com.github.virtual-headset.screenshot")
+  c.panel.appearance = NSAppearance(named: .darkAqua)
+  for (name, call, denoise, status, level, advanced, focus) in [
+    ("live", "unmuted", true, "Using AirPods Pro", -24.0, false, nil),
+    ("muted", "muted", true, "Mic released while the call is muted", nil, false, nil),
+    ("no-call", "none", false, "Standby — opens when an app uses it", nil, false, nil),
+    ("advanced", "none", true, "Standby — opens when an app uses it", nil, true, nil),
+    ("keyboard", "unmuted", true, "Using AirPods Pro", -24.0, false, "strength"),
+  ] {
+    c.focusID = focus
+    c.keyboardActive = focus != nil
+    c.call = call
+    c.denoise = denoise
+    c.status = status
+    c.shownLevel = level
+    c.showAdvanced = advanced
+    c.buildContent()
+    c.panel.setFrameOrigin(NSPoint(x: 20, y: 60))
+    c.panel.orderFrontRegardless()
+    RunLoop.main.run(until: Date().addingTimeInterval(0.6))
+    let p = Process()
+    p.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+    p.arguments = ["-x", "-o", "-l", "\(c.panel.windowNumber)", "\(dir)/\(name).png"]
+    try? p.run()
+    p.waitUntilExit()
+    c.panel.orderOut(nil)
+  }
+}
+
 signal(SIGPIPE, SIG_IGN)  // a dead ffmpeg must not kill us mid-write
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
+if CommandLine.arguments.dropFirst().first == "screenshot" {
+  screenshots(to: CommandLine.arguments.dropFirst(2).first ?? ".")
+  exit(0)
+}
 let controller = Controller()
 signal(SIGTERM) { _ in
   controller.stop()

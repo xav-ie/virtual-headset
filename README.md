@@ -1,101 +1,156 @@
-# 🎧 Virtual Headset
+<img align="right" src="packages/virtual-headset-panel/icon.svg" width="96" alt="Virtual Headset logo: a red microphone on a slate tile">
+
+# Virtual Headset
 
 [![CI](https://github.com/xav-ie/virtual-headset/actions/workflows/ci.yml/badge.svg)](https://github.com/xav-ie/virtual-headset/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/xav-ie/virtual-headset?color=e0245e)](https://github.com/xav-ie/virtual-headset/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-e0245e)](LICENSE.md)
 
-**A software mute button for any microphone on Linux — that Zoom and Google Meet actually respect.**
+**A mute button for any microphone that Zoom and Google Meet actually obey, on
+Linux and macOS.** Your call app sees a real USB telephony headset, so a key, your
+status bar, or your browser toolbar mutes the call, and muting inside the call
+updates all of them too.
 
-Your mic probably doesn't have a mute button. Virtual Headset gives it one:
-press a key (or click your status bar, or your browser toolbar) and your call
-mutes — and when you mute inside Zoom or Meet, everything else follows. It works
-because the call apps see a real telephony headset, not a script poking at them.
+![A Zoom web call in Chrome on a Mac, with Virtual Headset's panel open under its red mic in the menu bar: Live, a Mute button, the input level, and noise suppression](assets/screenshot.png)
 
-<!-- TODO: drop a short screen recording / screenshot here (panel + bar + browser icon) -->
+- **Mute that the call app respects.** Zoom and Meet treat Virtual Headset's
+  button like a headset's: they mute themselves and light its mute light back,
+  so your key, your bar and the call app never disagree.
+- **Any mic.** The built-in mic, a USB mic, or Bluetooth earbuds; nothing to
+  buy.
+- **Mute from anywhere.** A keyboard shortcut, your status bar or menu bar, a
+  panel, the Firefox toolbar, or a script.
+- **Bluetooth that sounds right on macOS.** While you're muted, Virtual Headset
+  lets go of the mic, so earbuds switch back from tinny hands-free audio to full
+  stereo, and back again when you unmute.
+- **Background noise removed, on your Mac.** Optional [DeepFilterNet
+  3](https://github.com/Rikorose/DeepFilterNet) noise suppression runs on your
+  own computer, with an A/B test to hear the difference.
+- **In the browser too.** Chrome and other Chromium browsers talk to the
+  headset directly; a small extension does it for Firefox.
+- **Starts muted on Linux,** so you're never live by accident after logging in.
+- **Nix modules** for NixOS, nix-darwin and Home Manager.
 
-## Features
+## What you need
 
-- **Mute button for any mic** — no special hardware; use the microphone you already have.
-- **Speaks Zoom & Meet's language** — appears as a real USB telephony headset, so their own mute button stays in sync with yours, both ways.
-- **Mute from anywhere** — a keyboard shortcut, a click in your status bar, your browser toolbar, or D-Bus.
-- **Works in Firefox too** — a small extension bridges the web apps (Firefox has no WebHID), so mute syncs in the browser as well as the desktop client.
-- **Pick which mic to use** — choose the forwarded source from a desktop panel, the browser menu, or the CLI.
-- **Safe by default** — starts muted, so you're never accidentally live right after login.
-- **Status-bar ready** — Waybar, i3, Polybar, plus a built-in desktop panel.
-- **First-class NixOS** — NixOS & Home Manager modules included (and it runs on any distro).
+| Part      | Needs                                                                                                                                                                   |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Linux     | PipeWire, on any distribution ([NixOS module](docs/installation.md#nixos) included)                                                                                     |
+| macOS     | Nix, and the `amfi_get_out_of_my_way=1` boot argument, which needs System Integrity Protection turned off; see [why](docs/macos.md#why-the-boot-argument) before you do |
+| Your call | Zoom (web or desktop) or Google Meet, in Chrome or another Chromium browser; Firefox with [the extension](docs/browser-extension.md)                                    |
 
 ## How it works
 
-Virtual Headset creates two things:
+<!-- diagram:how-it-works -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/how-it-works-dark.svg">
+  <img src="docs/diagrams/how-it-works.svg" alt="Your call app thinks your mic is a headset, so it obeys your mute key. Your mic and your mute key go into Virtual Headset, an ordinary USB headset made in software, with a mic and a mute button. Zoom or Meet hears you through it, and obeys your mute key">
+</picture>
+<!-- /diagram:how-it-works -->
 
-1. a **virtual microphone** that forwards your real mic through PipeWire, and
-2. a **virtual USB telephony headset** that Zoom and Google Meet recognize.
+In your call app's settings, the headset shows up as two devices:
+**Virtual_Headset_Microphone**, the mic carrying your voice, and
+**Virtual_Headset**, its mute button. Zoom pairs them because their names match,
+and from then on treats them as one headset.
 
-Because conferencing apps trust headset mute buttons, you can now mute from your
-keyboard, status bar, or browser — and because the connection is two-way, muting
-inside the app updates your indicators too. The actual audio is muted by the app
-(just like a real headset), so there's nothing system-wide to clean up.
+## What it does
 
-→ Full details in [docs/architecture.md](./docs/architecture.md).
+<!-- diagram:capabilities -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/capabilities-dark.svg">
+  <img src="docs/diagrams/capabilities.svg" alt="One app, everything around your mic. Around Virtual Headset, a headset made in software: Zoom and Meet (mute in sync, web or desktop); Any mic (built-in, USB or Bluetooth); Stereo while muted (Bluetooth headsets (macOS)); Nix modules (for NixOS and nix-darwin); Scriptable (CLI, D-Bus or state files); Firefox (via an extension (Linux)); Noise removed (on your own Mac (macOS)); Mute from anywhere (a key, your bar, a panel)">
+</picture>
+<!-- /diagram:capabilities -->
 
-## Quick start (NixOS)
+## Quick start
+
+**Linux, with NixOS:**
 
 ```nix
 {
   inputs.virtual-headset.url = "github:xav-ie/virtual-headset";
 
-  # in your NixOS configuration:
+  # in your NixOS configuration
   imports = [ inputs.virtual-headset.nixosModules.default ];
+  services.virtual-headset = {
+    enable = true;
+    user = "you";
+  };
+}
+```
+
+**macOS, with nix-darwin:**
+
+```nix
+{
+  inputs.virtual-headset.url = "github:xav-ie/virtual-headset";
+
+  # in your nix-darwin configuration
+  imports = [ inputs.virtual-headset.darwinModules.default ];
   services.virtual-headset.enable = true;
 }
 ```
 
-That's it — the service starts at login (muted), creates
-`Virtual_Headset_Microphone`, and sets up device permissions. In Zoom/Meet,
-choose **Virtual_Headset_Microphone** as your input.
+Not using Nix on Linux? See [installation](docs/installation.md#without-nix).
 
-Not on Nix, or want the Home Manager / Waybar / browser pieces? See the
-[installation guide](./docs/installation.md).
+**Then, in your call:**
 
-## Control it from anywhere
+1. Choose **Virtual_Headset_Microphone** as your microphone.
+2. In Zoom, open **Settings → Audio**, turn on **Sync buttons on headset**, and
+   connect **Virtual_Headset** when the browser asks.
+3. Press mute: `virtual-headset-ctl toggle-mute` on Linux, `virtual-headset
+toggle-mute` on macOS. Bind it to a key.
 
-| Where             | How                                                                               |
-| ----------------- | --------------------------------------------------------------------------------- |
-| **Keyboard**      | Bind a key to `virtual-headset-ctl toggle-mute`                                   |
-| **Status bar**    | [Waybar / i3 / Polybar modules](./docs/status-bar.md)                             |
-| **Desktop panel** | A built-in [AGS panel](./docs/status-bar.md#desktop-panel) — mute + source picker |
-| **Browser**       | A [Firefox extension](./docs/browser-extension.md) — toolbar mute + source menu   |
-| **Scripts**       | `virtual-headset-ctl` or the [D-Bus interface](./docs/usage.md#d-bus-interface)   |
+## Mute from anywhere
+
+| Where           | Linux                                                                    | macOS                                                                |
+| --------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| **Keyboard**    | bind `virtual-headset-ctl toggle-mute`                                   | bind `virtual-headset toggle-mute` (skhd, Raycast, …)                |
+| **Your bar**    | [Waybar, i3 or Polybar](docs/status-bar.md)                              | [any menu bar tool](docs/macos.md#your-menu-bar), e.g. SketchyBar    |
+| **A panel**     | the [desktop panel](docs/status-bar.md#desktop-panel), with a mic picker | the [settings panel](docs/macos.md#the-panel)                        |
+| **The browser** | the [Firefox extension](docs/browser-extension.md)                       | Chrome's own headset support                                         |
+| **Scripts**     | `virtual-headset-ctl` or [D-Bus](docs/usage.md#d-bus)                    | `virtual-headset` and [its state files](docs/macos.md#your-menu-bar) |
+
+<!-- diagram:mute-anywhere -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/mute-anywhere-dark.svg">
+  <img src="docs/diagrams/mute-anywhere.svg" alt="Mute from anywhere, and everything agrees. Press mute anywhere (a key, your menu or status bar, the panel, the Firefox toolbar, or Zoom or Meet's own button), and Zoom or Meet mutes: it's the one place mute is decided. It then shows everywhere: your menu or status bar, the panel, the Firefox toolbar, and Zoom or Meet">
+</picture>
+<!-- /diagram:mute-anywhere -->
+
+## Stereo while you're muted, on macOS
+
+A Bluetooth headset can't play stereo and carry your voice at the same time, so
+whenever an app holds its mic, macOS switches it to mono call audio. Most call
+apps hold the mic for the whole meeting; Virtual Headset only while you're live:
+
+<!-- diagram:bluetooth -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/bluetooth-dark.svg">
+  <img src="docs/diagrams/bluetooth.svg" alt="Muted, you hear full stereo: a Bluetooth headset only drops to call audio while your mic is open, and Virtual Headset opens it only while you're live. While you're muted your mic is off and you hear full stereo. When you unmute, the mic turns on and the headset switches to call audio, which is mono, and your first word may clip while it switches. When you mute, the mic turns off, and about 2 seconds later stereo is back">
+</picture>
+<!-- /diagram:bluetooth -->
 
 ## Documentation
 
-- [Installation](./docs/installation.md) — Nix modules, building from source, requirements, device permissions
-- [Usage & control](./docs/usage.md) — `virtual-headset-ctl`, D-Bus, and HID reference
-- [Browser extension](./docs/browser-extension.md) — Firefox bridge for Zoom/Meet web apps
-- [Status bar & desktop panel](./docs/status-bar.md) — Waybar/i3/Polybar and the AGS panel
-- [How it works](./docs/architecture.md) — architecture and the technical details
-- [Troubleshooting](./docs/troubleshooting.md)
-- [Development](./docs/development.md)
-- [macOS](./docs/macos.md) — the agent, the Virtual_Headset_Microphone driver, and A2DP while muted
-
-## Requirements
-
-- Linux with kernel HID support (standard since 2012)
-- PipeWire
-
-macOS works too; see [macOS](./docs/macos.md) for its (different) requirements.
-
-The Nix package bundles the rest. Without Nix you'll also need `pw-loopback`
-(pipewire) and `pactl` (pipewire-pulse / pulseaudio-utils) — see
-[installation](./docs/installation.md).
+- [Installation](docs/installation.md): NixOS, nix-darwin, Home Manager, and without Nix
+- [Using it](docs/usage.md): day to day, and the CLI, D-Bus and HID reference
+- [macOS](docs/macos.md): the panel, noise suppression, Bluetooth, and your menu bar
+- [Status bars and the panel](docs/status-bar.md) on Linux
+- [Firefox](docs/browser-extension.md): the extension that syncs Zoom and Meet tabs
+- [How it works](docs/architecture.md): the devices, the reports, and why Zoom trusts them
+- [Troubleshooting](docs/troubleshooting.md)
+- [Development](docs/development.md)
 
 ## Credits
 
-Built on the shoulders of these excellent resources:
-
 - [Make your first steps with a USB HID Report](https://www.noser.com/techblog/first-steps-with-an-usb-hid-report/)
 - [Introduction to HID report descriptors](https://www.kernel.org/doc/html/latest/hid/hidintro.html)
-- [UHID — User-space I/O driver support for HID](https://www.kernel.org/doc/html/latest/hid/uhid.html)
-- [uhid-virt](https://crates.io/crates/uhid-virt) for virtual HID device creation
+- [UHID: user-space I/O driver support for HID](https://www.kernel.org/doc/html/latest/hid/uhid.html)
+- [uhid-virt](https://crates.io/crates/uhid-virt) for the Linux HID device
+- [BlackHole](https://github.com/ExistentialAudio/BlackHole), the base of the macOS microphone
+- [DeepFilterNet](https://github.com/Rikorose/DeepFilterNet) and [RNNoise](https://github.com/xiph/rnnoise) for noise suppression
 
 ## License
 
-[MIT](./LICENSE.md)
+[MIT](LICENSE.md)

@@ -1,136 +1,96 @@
-# Usage & control
+# Using it
 
-The virtual headset can be controlled from the keyboard, a status bar, the
-browser, or scripts. Under the hood everything goes through one of three
-surfaces: the `virtual-headset-ctl` CLI, the D-Bus interface, or raw HID
-reports.
+Day to day, you'll do three things: pick **Virtual_Headset_Microphone** in your
+call app, connect **Virtual_Headset** once in Zoom, and press mute. The rest of
+this page is the reference for scripting it.
 
-- [Running it](#running-it)
-- [Controls (interactive)](#controls-interactive)
-- [virtual-headset-ctl](#virtual-headset-ctl)
-- [D-Bus interface](#d-bus-interface)
-- [HID control](#hid-control)
-- [Examples](#examples)
+- [In your call](#in-your-call)
+- [Mute](#mute)
+- [Linux: virtual-headset-ctl](#linux-virtual-headset-ctl)
+- [Linux: D-Bus](#d-bus)
+- [Linux: HID reports](#hid-reports)
+- [macOS](#macos)
 
-## Running it
+## In your call
 
-### As a service (NixOS)
+1. Choose **Virtual_Headset_Microphone** as your microphone.
+2. **Zoom:** open **Settings → Audio** and turn on **Sync buttons on headset**.
+   In the browser, Zoom asks to connect a HID device: pick **Virtual_Headset**.
+   Zoom only pairs the headset with a mic whose name contains its name, which is
+   why the mic must be Virtual_Headset_Microphone.
+3. **Google Meet** pairs with the headset whatever mic you choose.
+4. **Firefox** can't talk to headsets at all; use [the extension](browser-extension.md).
 
-The service starts automatically at login and comes up **muted**. Control it
-with:
+## Mute
 
-```bash
-systemctl --user status virtual-headset
-systemctl --user restart virtual-headset
-```
+<!-- diagram:mute-anywhere -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="diagrams/mute-anywhere-dark.svg">
+  <img src="diagrams/mute-anywhere.svg" alt="Mute from anywhere, and everything agrees. Press mute anywhere (a key, your menu or status bar, the panel, the Firefox toolbar, or Zoom or Meet's own button), and Zoom or Meet mutes: it's the one place mute is decided. It then shows everywhere: your menu or status bar, the panel, the Firefox toolbar, and Zoom or Meet">
+</picture>
+<!-- /diagram:mute-anywhere -->
 
-On a non-interactive start (the service), it forwards your configured source, or
-the PipeWire **default** source if none is set. After changing the default
-source, restart the service so it picks up the new input — or set a specific one
-with `virtual-headset-ctl set-source` (see [Status bar & desktop
-panel](./status-bar.md)).
+A mute press is a headset's button press, so the call app decides what it
+means: if you're live it mutes, if you're muted it unmutes. On Linux, Virtual
+Headset starts **muted** after login.
 
-### Manually (interactive)
+**Push to talk** (Linux): bind `virtual-headset-ctl ptt-press` to a key's press
+and `ptt-release` to its release. Hold the key to talk; tap it (under 300 ms) to
+stay unmuted until the next press.
 
-```bash
-virtual-headset
-# or, if built with cargo:
-./target/release/virtual-headset
-```
+## Linux: virtual-headset-ctl
 
-Then pick your real microphone, and in Zoom/Meet select
-**Virtual_Headset_Microphone** as your input.
+| Command                                        |                                                            |
+| ---------------------------------------------- | ---------------------------------------------------------- |
+| `toggle-mute`, `mute`, `unmute`                | press the mute button (through the headset: most reliable) |
+| `toggle-mute-dbus`, `mute-dbus`, `unmute-dbus` | the same, through D-Bus                                    |
+| `ptt-press`, `ptt-release`                     | push to talk: hold to talk, tap to latch                   |
+| `get-source`                                   | the mic being forwarded                                    |
+| `list-sources`                                 | the mics you can forward, as JSON                          |
+| `set-source <name>`                            | forward that mic (restarts the service: the mic blips)     |
+| `clear-source`                                 | follow the system's default mic again                      |
+| `monitor-mute`                                 | stream mute changes as JSON, for status bars               |
+| `restart-service`                              | restart the user service                                   |
+| `find-device`                                  | print the headset's `/dev/hidraw*` path                    |
 
-## Controls (interactive)
+## D-Bus
 
-- **`m`** — toggle mute (sends the HID button event to apps)
-- **`q`** / **`Esc`** — quit and clean up
-- **`Ctrl+C`** — emergency quit
+The daemon serves `com.github.virtual_headset` at `/com/github/virtual_headset`,
+interface `com.github.virtual_headset.Mute`:
 
-## virtual-headset-ctl
+| Member               |                                      |
+| -------------------- | ------------------------------------ |
+| `IsMuted() → bool`   | the current state                    |
+| `Mute()`, `Unmute()` | change it, if that changes something |
+| `Toggle()`           | flip it                              |
+| `MuteChanged(bool)`  | signal, sent on every change         |
 
-The `virtual-headset-ctl` utility provides convenient commands:
+```sh
+dbus-send --session --print-reply --dest=com.github.virtual_headset \
+  /com/github/virtual_headset com.github.virtual_headset.Mute.Toggle
 
-| Command                                          | Description                                            |
-| ------------------------------------------------ | ------------------------------------------------------ |
-| `mute` / `unmute` / `toggle-mute`                | Set mute state (via HID OUTPUT report — most reliable) |
-| `mute-dbus` / `unmute-dbus` / `toggle-mute-dbus` | Same, via D-Bus                                        |
-| `ptt-press` / `ptt-release`                      | Push-to-talk key down/up: hold to talk, tap to latch   |
-| `get-source`                                     | Description of the source currently being forwarded    |
-| `list-sources`                                   | Forwardable input sources as JSON (for pickers)        |
-| `set-source <name>`                              | Forward a specific source (restarts the service)       |
-| `clear-source`                                   | Go back to following the system default source         |
-| `monitor-mute`                                   | Stream mute-state changes as JSON (for status bars)    |
-| `restart-service`                                | Restart the systemd user service                       |
-| `find-device`                                    | Print the hidraw device path                           |
-
-## D-Bus interface
-
-- **Service**: `com.github.virtual_headset`
-- **Object path**: `/com/github/virtual_headset`
-- **Interface**: `com.github.virtual_headset.Mute`
-
-**Methods**
-
-- `IsMuted() -> bool` — query current mute state
-- `Mute()` — mute if not already muted
-- `Unmute()` — unmute if currently muted
-- `Toggle()` — toggle the mute state
-
-**Signals**
-
-- `MuteChanged(bool muted)` — emitted whenever the mute state changes
-
-## HID control
-
-The device accepts control commands via HID OUTPUT reports (report ID 3):
-
-- Write `[0x03, 0x01]` to `/dev/hidraw*` to **mute**
-- Write `[0x03, 0x02]` to `/dev/hidraw*` to **unmute**
-- Write `[0x03, 0x03]` to `/dev/hidraw*` to **toggle**
-
-The daemon receives these and sends INPUT reports to connected applications.
-
-## Examples
-
-**Toggle mute**
-
-```bash
-# Recommended — sends the HID OUTPUT report directly
-virtual-headset-ctl toggle-mute
-
-# Or manually to the hidraw device
-echo -ne '\x03\x03' > /dev/hidraw0   # replace hidraw0 with your device
-```
-
-**Toggle via D-Bus**
-
-```bash
-virtual-headset-ctl toggle-mute-dbus
-
-# Or directly with dbus-send
-dbus-send --session --print-reply \
-  --dest=com.github.virtual_headset \
-  /com/github/virtual_headset \
-  com.github.virtual_headset.Mute.Toggle
-```
-
-**Query current state**
-
-```bash
-dbus-send --session --print-reply \
-  --dest=com.github.virtual_headset \
-  /com/github/virtual_headset \
-  com.github.virtual_headset.Mute.IsMuted
-```
-
-**Monitor for changes**
-
-```bash
-# JSON, suitable for status bars
-virtual-headset-ctl monitor-mute
-
-# Or directly with dbus-monitor
 dbus-monitor --session \
   "type='signal',interface='com.github.virtual_headset.Mute',member='MuteChanged'"
 ```
+
+## HID reports
+
+The headset also takes commands as HID output report 3, written to its
+`/dev/hidraw*` device: `03 01` mutes, `03 02` unmutes, `03 03` toggles. This is
+what `virtual-headset-ctl` does.
+
+```sh
+printf '\x03\x03' > "$(virtual-headset-ctl find-device)"
+```
+
+## macOS
+
+The `virtual-headset` command talks to the running app:
+
+| Command                         |                                  |
+| ------------------------------- | -------------------------------- |
+| `toggle-mute`, `mute`, `unmute` | press the headset's mute button  |
+| `panel [x]`                     | open or close the settings panel |
+
+Its state, for menu bars and scripts, is in `~/.cache/virtual-headset`; see
+[your menu bar](macos.md#your-menu-bar).

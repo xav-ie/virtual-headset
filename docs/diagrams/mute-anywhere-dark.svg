@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1062 352" width="1062" height="352" role="img"><style>
+  text { font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; fill: #eef0f4; }
+  .bg { fill: #1c1f26; }
+  .box { fill: #262a33; stroke: #3b414e; stroke-width: 2; }
+  .key { fill: #ff4d7d; fill-opacity: .08; stroke: #ff4d7d; stroke-width: 2.5; }
+  .head { font-size: 19px; font-weight: 700; }
+  .lede { font-size: 14.5px; fill: #a7aebd; }
+  .title { font-size: 16px; font-weight: 650; }
+  .sub { font-size: 13.5px; fill: #a7aebd; }
+  .label { font-size: 13px; font-weight: 600; fill: #eef0f4; }
+  .axis { font-size: 12.5px; fill: #a7aebd; }
+  .axis-strong { font-size: 12.5px; font-weight: 650; fill: #eef0f4; }
+  .edge { fill: none; stroke: #a3abbd; stroke-width: 2; marker-end: url(#arrow); }
+  .spoke { stroke: #3b414e; stroke-width: 2.5; }
+  .tick { stroke: #a7aebd; stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .tag { fill: #1c1f26; }
+  .arrowhead { fill: #a3abbd; }
+  .badge { fill: #ff4d7d; }
+  .badge-text { font-size: 12px; font-weight: 700; fill: #ffffff; }
+  .ink { fill: none; stroke: #eef0f4; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+  .ink-live { fill: none; stroke: #ff4d7d; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+  .seg-quiet { fill: #262a33; stroke: #3b414e; stroke-width: 1.5; }
+  .seg-live { fill: #ff4d7d; fill-opacity: .2; stroke: #ff4d7d; stroke-width: 1.5; }
+  .seg-ok { fill: #5ad18a; fill-opacity: .2; stroke: #5ad18a; stroke-width: 1.5; }
+  .seg-mono { fill: #a3abbd; fill-opacity: .16; stroke: #a3abbd; stroke-width: 1.5; }
+</style><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="arrowhead" d="M0 0L10 5L0 10z"/></marker></defs><rect class="bg" width="1062" height="352" rx="16"/><text class="head" x="24" y="36">Mute from anywhere, and everything agrees</text><text class="lede" x="24" y="60">every mute goes to your call app, which decides, and every indicator shows what it decided</text><rect class="box" x="24" y="92" width="251.3" height="236" rx="14"/><path class="ink" transform="translate(149.7 126.7)" d="M-21 -12h42a4 4 0 0 1 4 4v18a4 4 0 0 1 -4 4h-42a4 4 0 0 1 -4 -4v-18a4 4 0 0 1 4 -4zM-16 -5h2M-8 -5h2M0 -5h2M8 -5h2M16 -5h2M-12 2h2M-4 2h2M4 2h2M12 2h2M-10 8h20"/><text class="title" x="149.7" y="176.7" text-anchor="middle">Press mute anywhere</text><circle class="badge" cx="46" cy="203.8" r="3"/><text class="sub" x="58" y="208.3">a key</text><circle class="badge" cx="46" cy="228.8" r="3"/><text class="sub" x="58" y="233.3">your menu or status bar</text><circle class="badge" cx="46" cy="253.8" r="3"/><text class="sub" x="58" y="258.3">the panel</text><circle class="badge" cx="46" cy="278.8" r="3"/><text class="sub" x="58" y="283.3">the Firefox toolbar</text><circle class="badge" cx="46" cy="303.8" r="3"/><text class="sub" x="58" y="308.3">Zoom or Meet's own button</text><rect class="key" x="405.3" y="92" width="251.3" height="236" rx="14"/><path class="ink-live" transform="translate(531 185.1)" d="M-23 -17h46a3 3 0 0 1 3 3v28a3 3 0 0 1 -3 3h-46a3 3 0 0 1 -3 -3v-28a3 3 0 0 1 3 -3zM-26 -9h52M-18 -3h16v8h-16zM2 -3h16v8h-16zM-18 8h16v4h-16zM2 8h16v4h-16z"/><text class="title" x="531" y="235.1" text-anchor="middle">Zoom or Meet mutes</text><text class="sub" x="531" y="254.9" text-anchor="middle">the one place mute is decided</text><rect class="box" x="786.7" y="92" width="251.3" height="236" rx="14"/><path class="ink" transform="translate(912.3 139.2)" d="M-6 -20h12v18a6 6 0 0 1 -12 0zM-6 -20a6 6 0 0 1 12 0M-13 -4a13 13 0 0 0 26 0M0 9v11M-8 20h16M-18 -18L18 18"/><text class="title" x="912.3" y="189.2" text-anchor="middle">It shows everywhere</text><circle class="badge" cx="808.7" cy="216.3" r="3"/><text class="sub" x="820.7" y="220.8">your menu or status bar</text><circle class="badge" cx="808.7" cy="241.3" r="3"/><text class="sub" x="820.7" y="245.8">the panel</text><circle class="badge" cx="808.7" cy="266.3" r="3"/><text class="sub" x="820.7" y="270.8">the Firefox toolbar</text><circle class="badge" cx="808.7" cy="291.3" r="3"/><text class="sub" x="820.7" y="295.8">Zoom or Meet</text><path class="edge" d="M275.3 210L405.3 210"/><rect class="tag" x="319.3" y="182" width="42.1" height="22" rx="6"/><text class="label" x="326.3" y="197.5">mute</text><path class="edge" d="M656.7 210L786.7 210"/><rect class="tag" x="697.1" y="182" width="49.1" height="22" rx="6"/><text class="label" x="704.1" y="197.5">muted</text></svg>

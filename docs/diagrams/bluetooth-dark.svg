@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1062 328" width="1062" height="328" role="img"><style>
+  text { font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; fill: #eef0f4; }
+  .bg { fill: #1c1f26; }
+  .box { fill: #262a33; stroke: #3b414e; stroke-width: 2; }
+  .key { fill: #ff4d7d; fill-opacity: .08; stroke: #ff4d7d; stroke-width: 2.5; }
+  .head { font-size: 19px; font-weight: 700; }
+  .lede { font-size: 14.5px; fill: #a7aebd; }
+  .title { font-size: 16px; font-weight: 650; }
+  .sub { font-size: 13.5px; fill: #a7aebd; }
+  .label { font-size: 13px; font-weight: 600; fill: #eef0f4; }
+  .axis { font-size: 12.5px; fill: #a7aebd; }
+  .axis-strong { font-size: 12.5px; font-weight: 650; fill: #eef0f4; }
+  .edge { fill: none; stroke: #a3abbd; stroke-width: 2; marker-end: url(#arrow); }
+  .spoke { stroke: #3b414e; stroke-width: 2.5; }
+  .tick { stroke: #a7aebd; stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .tag { fill: #1c1f26; }
+  .arrowhead { fill: #a3abbd; }
+  .badge { fill: #ff4d7d; }
+  .badge-text { font-size: 12px; font-weight: 700; fill: #ffffff; }
+  .ink { fill: none; stroke: #eef0f4; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+  .ink-live { fill: none; stroke: #ff4d7d; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+  .seg-quiet { fill: #262a33; stroke: #3b414e; stroke-width: 1.5; }
+  .seg-live { fill: #ff4d7d; fill-opacity: .2; stroke: #ff4d7d; stroke-width: 1.5; }
+  .seg-ok { fill: #5ad18a; fill-opacity: .2; stroke: #5ad18a; stroke-width: 1.5; }
+  .seg-mono { fill: #a3abbd; fill-opacity: .16; stroke: #a3abbd; stroke-width: 1.5; }
+</style><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="arrowhead" d="M0 0L10 5L0 10z"/></marker></defs><rect class="bg" width="1062" height="328" rx="16"/><text class="head" x="24" y="36">Muted, you hear full stereo</text><text class="lede" x="24" y="60">a Bluetooth headset only drops to call audio while your mic is open, and Virtual Headset opens it only while you're live</text><line class="tick" x1="384.4" y1="92" x2="384.4" y2="276"/><line class="tick" x1="719.6" y1="92" x2="719.6" y2="276"/><line class="tick" x1="870.4" y1="92" x2="870.4" y2="276"/><text class="axis-strong" x="384.4" y="296" text-anchor="middle">you unmute</text><text class="axis" x="384.4" y="314" text-anchor="middle">your first word may clip</text><text class="axis-strong" x="719.6" y="296" text-anchor="middle">you mute</text><text class="axis-strong" x="870.4" y="296" text-anchor="middle">about 2 s later</text><text class="axis" x="870.4" y="314" text-anchor="middle">stereo is back</text><text class="title" x="24" y="129">In your call</text><rect class="seg-quiet" x="202" y="100" width="180.4" height="46" rx="8"/><text class="sub" x="292.2" y="128" text-anchor="middle">muted</text><rect class="seg-live" x="386.4" y="100" width="331.2" height="46" rx="8"/><text class="sub" x="552" y="128" text-anchor="middle">live</text><rect class="seg-quiet" x="721.6" y="100" width="314.4" height="46" rx="8"/><text class="sub" x="878.8" y="128" text-anchor="middle">muted</text><text class="title" x="24" y="189">Your mic</text><rect class="seg-quiet" x="202" y="160" width="180.4" height="46" rx="8"/><text class="sub" x="292.2" y="188" text-anchor="middle">off</text><rect class="seg-live" x="386.4" y="160" width="331.2" height="46" rx="8"/><text class="sub" x="552" y="188" text-anchor="middle">on</text><rect class="seg-quiet" x="721.6" y="160" width="314.4" height="46" rx="8"/><text class="sub" x="878.8" y="188" text-anchor="middle">off</text><text class="title" x="24" y="249">What you hear</text><rect class="seg-ok" x="202" y="220" width="180.4" height="46" rx="8"/><text class="sub" x="292.2" y="248" text-anchor="middle">full stereo</text><rect class="seg-mono" x="386.4" y="220" width="482" height="46" rx="8"/><text class="sub" x="627.4" y="248" text-anchor="middle">call audio (mono)</text><rect class="seg-ok" x="872.4" y="220" width="163.6" height="46" rx="8"/><text class="sub" x="954.2" y="248" text-anchor="middle">full stereo</text></svg>

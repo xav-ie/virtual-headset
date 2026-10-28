@@ -58,11 +58,13 @@ stdenv.mkDerivation {
   '';
 
   # Seal the bundle with its final identity after stdenv's darwin fixup (which
-  # would otherwise re-sign the Mach-O back to "virtual-headset"), so the cdhash the
-  # Microphone grant pins is baked into the store bundle. The entitlement lets it
-  # create the Virtual_Headset HID device; ad-hoc signed, that only holds with
-  # amfi_get_out_of_my_way=1. Needs Apple's /usr/bin/codesign, hence __noChroot
-  # (build with sandbox = relaxed or false).
+  # would otherwise re-sign the Mach-O back to "virtual-headset"). Ad-hoc signed,
+  # both entitlements only hold with amfi_get_out_of_my_way=1:
+  #   hid.virtual.device  create the Virtual_Headset HID device
+  #   private.tcc.allow   microphone access; with AMFI relaxed the app can't
+  #                       raise the usual permission prompt
+  # Needs Apple's /usr/bin/codesign, hence __noChroot (build with sandbox =
+  # relaxed or false).
   __noChroot = true;
   postFixup = ''
     cat > entitlements.plist <<'EOF'
@@ -70,6 +72,8 @@ stdenv.mkDerivation {
     <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
     <plist version="1.0"><dict>
       <key>com.apple.developer.hid.virtual.device</key><true/>
+      <key>com.apple.private.tcc.allow</key>
+      <array><string>kTCCServiceMicrophone</string></array>
     </dict></plist>
     EOF
     /usr/bin/codesign --force --sign - --identifier com.github.virtual-headset \

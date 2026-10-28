@@ -1,105 +1,100 @@
 # Installation
 
-- [NixOS](#nixos) (recommended)
-- [Home Manager](#home-manager)
-- [Building from source](#building-from-source)
-- [Requirements](#requirements)
-- [Device permissions](#device-permissions) (non-NixOS)
+- **Linux:** [NixOS](#nixos), [Home Manager extras](#home-manager-extras), or
+  [without Nix](#without-nix)
+- **macOS:** [nix-darwin](#macos)
 
 ## NixOS
-
-Add the flake input and enable the module:
 
 ```nix
 {
   inputs.virtual-headset.url = "github:xav-ie/virtual-headset";
 
-  # in your NixOS configuration:
+  # in your NixOS configuration
   imports = [ inputs.virtual-headset.nixosModules.default ];
-  services.virtual-headset.enable = true;
+  services.virtual-headset = {
+    enable = true;
+    user = "you"; # gets access to the virtual device
+  };
 }
 ```
 
-The module installs the daemon, sets up the udev rules and `input` group
-membership, and runs `virtual-headset` as a user service that starts at login.
-See [nixosModules/default.nix](../nixosModules/default.nix) for all options.
+This installs Virtual Headset, gives your user access to the virtual device, and
+runs it at login, **muted**. It forwards your default mic; to forward a different
+one, pick it from the [panel](status-bar.md#desktop-panel), the
+[Firefox extension](browser-extension.md) or `virtual-headset-ctl set-source`. All
+options are in [nixosModules/default.nix](../nixosModules/default.nix).
 
-## Home Manager
+## Home Manager extras
 
-Two optional Home Manager modules add desktop integration:
+Two optional Home Manager modules add a Waybar indicator and the Firefox
+extension:
 
 ```nix
 {
   imports = [
-    virtual-headset.homeManagerModules.default # Waybar mute indicator
-    virtual-headset.homeManagerModules.firefox # Firefox bridge native host
+    inputs.virtual-headset.homeManagerModules.default # Waybar
+    inputs.virtual-headset.homeManagerModules.firefox # Firefox
   ];
 
   programs.virtual-headset-waybar.enable = true;
-  programs.virtual-headset-firefox.enable = true;
-  # Force-install the Mozilla-signed extension from its latest GitHub release
-  # (auto-updates). Requires programs.firefox to manage Firefox. Omit to only
-  # register the native host and load the extension yourself.
-  programs.virtual-headset-firefox.installExtension = true;
+  programs.virtual-headset-firefox = {
+    enable = true;
+    # Install the signed extension from the latest release, kept up to date.
+    # Needs programs.firefox; leave it out to load the extension yourself.
+    installExtension = true;
+  };
 }
 ```
 
-- `homeManagerModules.default` — a Waybar module showing/toggling mute. See
-  [Status bar & desktop panel](./status-bar.md).
-- `homeManagerModules.firefox` — registers the browser native-messaging host and,
-  with `installExtension = true`, declaratively installs the signed extension.
-  See [Browser extension](./browser-extension.md).
+See [status bars](status-bar.md#waybar) and [Firefox](browser-extension.md) for
+what they do.
 
-## Building from source
+## Without Nix
 
-```bash
-# Using Nix flakes
-just build      # or: nix build
+You need PipeWire, with `pw-loopback` (from `pipewire`) and `pactl` (from
+`pipewire-pulse` or `pulseaudio-utils`).
 
-# Or with Cargo
-cargo build --release --manifest-path packages/virtual-headset/Cargo.toml
+1. **Build it.**
+
+   ```sh
+   cargo build --release --manifest-path packages/virtual-headset/Cargo.toml
+   ```
+
+2. **Allow access to the virtual device.** Save this as
+   `/etc/udev/rules.d/99-virtual-headset.rules`:
+
+   ```
+   # Create virtual HID devices
+   KERNEL=="uhid", MODE="0660", GROUP="input", TAG+="uaccess"
+
+   # Let browsers (WebHID) and virtual-headset-ctl reach the headset
+   KERNEL=="hidraw*", KERNELS=="0003:0B0E:245E.*", MODE="0666", TAG+="uaccess"
+   ```
+
+   Then add yourself to the `input` group, reload the rules, and log out and back
+   in:
+
+   ```sh
+   sudo usermod -aG input "$USER"
+   sudo udevadm control --reload-rules && sudo udevadm trigger
+   ```
+
+3. **Run it.** `./target/release/virtual-headset` asks which mic to forward, then
+   `m` toggles mute and `q` quits. Run as a service (no terminal), it forwards
+   your default mic.
+
+## macOS
+
+```nix
+{
+  inputs.virtual-headset.url = "github:xav-ie/virtual-headset";
+
+  # in your nix-darwin configuration
+  imports = [ inputs.virtual-headset.darwinModules.default ];
+  services.virtual-headset.enable = true;
+}
 ```
 
-## Requirements
-
-- Linux with kernel HID support (standard since 2012)
-- PipeWire
-
-If you're **not** using the Nix integration, also make sure you have:
-
-- `pw-loopback` (usually in the `pipewire` package)
-- `pactl` (usually in `pulseaudio-utils` or `pipewire-pulse`)
-
-The Nix package bundles these automatically.
-
-## Device permissions
-
-The program needs access to:
-
-- `/dev/uhid` — to create the virtual HID device
-- `/dev/hidraw*` — for control (and Chromium's WebHID) access to it
-
-On **NixOS** the module handles this for you. On **other distributions**, add
-udev rules at `/etc/udev/rules.d/99-virtual-headset.rules`:
-
-```
-# Allow access to /dev/uhid for creating virtual HID devices
-KERNEL=="uhid", MODE="0660", GROUP="input", TAG+="uaccess"
-
-# Allow browser WebHID access to the virtual headset device
-# Matches Jabra vendor (0x0b0e) product (0x245e)
-KERNEL=="hidraw*", KERNELS=="0003:0B0E:245E.*", MODE="0666", TAG+="uaccess"
-```
-
-Add your user to the `input` group:
-
-```bash
-sudo usermod -aG input $USER
-```
-
-Reload udev (and log out/in for the group change):
-
-```bash
-sudo udevadm control --reload-rules
-sudo udevadm trigger
-```
+macOS needs a boot argument first, and installing without nix-darwin takes a few
+manual steps: see [macOS](macos.md#install).
