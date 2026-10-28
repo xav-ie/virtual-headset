@@ -1,6 +1,6 @@
 {
   "name": "virtual-headset",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "The release version, bumped by knope (knope.toml); scripts/sync-manifest-version.mjs copies it into extension/static/manifest.json, which the Nix build reads."
 }
