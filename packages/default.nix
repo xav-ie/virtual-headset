@@ -8,6 +8,9 @@
 let
   writeNuApplication = nuenv.mkNushellScriptApplication pkgs.nushell pkgs.writeTextFile pkgs.lib;
   virtual-headset-ctl = pkgs.callPackage ./virtual-headset-ctl { inherit writeNuApplication; };
+  virtual-headset-panel = pkgs.callPackage ./virtual-headset-panel {
+    inherit agsPackages virtual-headset-ctl;
+  };
 in
 # Linux: uhid daemon + PipeWire loopback. macOS: one agent (HID via
 # IOHIDUserDevice, mic forwarding + optional denoising) + the
@@ -23,7 +26,8 @@ else
     inherit virtual-headset-ctl;
     virtual-headset = pkgs.callPackage ./virtual-headset { inherit craneLib virtual-headset-ctl; };
     virtual-headset-firefox = pkgs.callPackage ./virtual-headset-firefox { };
-    virtual-headset-panel = pkgs.callPackage ./virtual-headset-panel {
-      inherit agsPackages virtual-headset-ctl;
+    inherit virtual-headset-panel;
+    virtual-headset-panel-screenshots = pkgs.callPackage ./virtual-headset-panel-screenshots {
+      inherit virtual-headset-panel;
     };
   }
