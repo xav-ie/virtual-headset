@@ -16,6 +16,7 @@ if pkgs.stdenv.hostPlatform.isDarwin then
   {
     virtual-headset = pkgs.callPackage ./virtual-headset-macos { };
     virtual-headset-driver = pkgs.callPackage ./virtual-headset-driver { };
+    virtual-headset-firefox = pkgs.callPackage ./virtual-headset-firefox { };
   }
 else
   {

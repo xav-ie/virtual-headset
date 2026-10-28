@@ -12,6 +12,8 @@
 //! JSON):
 //!
 //! Extension -> host:
+//!   {"type":"call","active":bool}     whether a meeting tab is open (ignored
+//!                                      here; the macOS bridge makes it the call)
 //!   {"type":"setMute","muted":true}   set the headset mute state
 //!   {"type":"toggle"}                  toggle the headset mute state
 //!   {"type":"query"}                   request the current state
@@ -60,11 +62,21 @@ trait VirtualHeadset {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 enum InMessage {
-    SetMute { muted: bool },
+    /// Whether a meeting tab is open. On macOS that tab is the call itself; here
+    /// the daemon's headset already is, so it's accepted and ignored.
+    Call {
+        #[allow(dead_code)]
+        active: bool,
+    },
+    SetMute {
+        muted: bool,
+    },
     Toggle,
     Query,
     ListSources,
-    SetSource { name: String },
+    SetSource {
+        name: String,
+    },
     ClearSource,
     RestartService,
     Ping,
@@ -148,6 +160,7 @@ fn main() {
         };
 
         match serde_json::from_slice::<InMessage>(&msg) {
+            Ok(InMessage::Call { .. }) => {}
             Ok(InMessage::SetMute { muted }) => {
                 let res = if muted { proxy.mute() } else { proxy.unmute() };
                 if let Err(e) = res {

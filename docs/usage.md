@@ -19,7 +19,8 @@ this page is the reference for scripting it.
    Zoom only pairs the headset with a mic whose name contains its name, which is
    why the mic must be Virtual_Headset_Microphone.
 3. **Google Meet** pairs with the headset whatever mic you choose.
-4. **Firefox** can't talk to headsets at all; use [the extension](browser-extension.md).
+4. **Firefox** can't talk to headsets at all; use [the extension](browser-extension.md),
+   on Linux or macOS.
 
 ## Mute
 

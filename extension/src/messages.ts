@@ -18,8 +18,11 @@ export type HostMessage =
   | { type: "pong" }
   | { type: "error"; message: string };
 
-/** Background -> native host. */
+/** Background -> native host. `call` says whether a meeting tab with a mic
+ * control is open: on macOS that tab is the call itself (Firefox can't reach the
+ * headset); Linux ignores it. */
 export type HostCommand =
+  | { type: "call"; active: boolean }
   | { type: "setMute"; muted: boolean }
   | { type: "toggle" }
   | { type: "query" }
