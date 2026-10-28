@@ -86,6 +86,7 @@
                   clippy
                   knope # `knope document-change`: a note for the next release
                   nodejs # scripts/diagrams.mjs, scripts/screenshots.mjs
+                  oxipng # scripts/screenshots.mjs: lossless image optimization
                   rust-analyzer
                   rustc
                   rustfmt
