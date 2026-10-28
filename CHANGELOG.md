@@ -1,5 +1,29 @@
 # virtual-headset
 
+## 0.3.1 (2026-10-28)
+
+### Features
+
+#### Add a nix-darwin module, with microphone access by entitlement
+
+Add a nix-darwin module (`darwinModules.default`): `services.virtual-headset.enable` runs the macOS app at login, puts `virtual-headset` on your `PATH`, and installs the Virtual_Headset_Microphone driver. The app now has microphone access by entitlement, since apps can't show macOS's permission prompt under the boot argument it needs.
+
+#### Firefox extension on macOS
+
+The Firefox extension now works on macOS. `virtual-headset bridge` is its native-messaging host there, speaking the same protocol as on Linux, and a Zoom or Meet tab in Firefox becomes the call: the menu bar and panel show its mute, the mic is released while it's muted, and your mute key clicks the tab's mic button. Register the host with `services.virtual-headset.firefox = true` (nix-darwin), the Home Manager module, or `install-native-host.sh`.
+
+#### Linux panel like the Mac, and noise suppression
+
+Linux catches up with the Mac: optional DeepFilterNet noise suppression (a PipeWire filter-chain in place of the loopback, with live strength), the call's mute state from the headset's off-hook light, a mic level meter, and a "Keep the mic open between calls" setting. The desktop panel is laid out like the macOS one, with keyboard focus rings and screen-reader labels, and `virtual-headset-ctl` gains `state`, `monitor-state`, `monitor-level`, `set-denoise`, `set-strength`, `set-keep-open`, `test-record` and `test-play`.
+
+#### Add macOS support
+
+Add macOS support: one agent forwards your mic (optionally denoised with DeepFilterNet 3 or RNNoise) into a `Virtual_Headset_Microphone` loopback device and presents the `Virtual_Headset` HID telephony headset that Zoom and Meet sync mute with. While the call is muted it releases the real mic, so Bluetooth headsets switch back from hands-free to stereo. See `docs/macos.md`.
+
+#### Add push-to-talk with tap to latch
+
+Add `virtual-headset-ctl ptt-press` and `ptt-release` for a push-to-talk key: holding it talks until release, while a tap (under 300 ms) keeps the mic unmuted until the next press.
+
 ## 0.3.0
 
 ### Minor Changes
