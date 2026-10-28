@@ -1,7 +1,7 @@
 // Structural + a couple of targeted accents. Base colours come from the (dark)
-// Adwaita theme via style classes (`background`, `flat`, `destructive-action`,
-// `dim-label`, `title-4`). The layer surface is transparent; `.background` is
-// the card.
+// Adwaita theme via style classes (`background`, `flat`, `dim-label`). The layer
+// surface is transparent; `.background` is the card. Laid out like the macOS
+// panel: the call first, small grey section headings, a key column of row titles.
 
 window {
   background-color: transparent;
@@ -10,50 +10,63 @@ window {
 .vh-panel {
   padding: 14px;
   border-radius: 16px;
-  min-width: 360px;
+  min-width: 340px;
 }
 
-.vh-icon-btn {
+// Keyboard focus: a 2px ring 4px outside the control, in the text colour (the
+// Tetherbug / macOS panel ring). :focus-visible, so it only shows once the
+// keyboard is in use; clicking doesn't light it.
+button:focus-visible,
+checkbutton:focus-visible,
+dropdown:focus-visible > button,
+scale:focus-visible,
+switch:focus-visible {
+  outline: 2px solid unquote("@theme_fg_color");
+  outline-offset: 4px;
+}
+
+.vh-call-title {
+  font-size: 1.15em;
+  font-weight: 600;
+}
+
+// The live mic: red, like the menu bar icon and the macOS panel.
+.vh-live {
+  color: #e0245e;
+}
+
+.vh-quiet {
+  opacity: 0.6;
+}
+
+.vh-close {
   min-width: 0;
   padding: 4px 6px;
 }
 
-// Mute + Restart row, equal width.
-.vh-ctl-btn {
-  padding: 12px;
-  border-radius: 10px;
-  font-weight: bold;
-}
-
-// Live mic: themed red background needs white text for contrast.
-.vh-ctl-btn.destructive-action,
-.vh-ctl-btn.destructive-action label {
-  color: #ffffff;
-}
-
-.vh-source {
-  padding: 8px 10px;
-  border-radius: 8px;
-}
-
-// The forwarded source: clearly highlighted (the row stays sensitive, so it
-// isn't dimmed by GTK's disabled styling). `unquote` passes GTK's named theme
-// colours through sass, which would otherwise choke on the `@` syntax.
-.vh-source.active {
-  background-color: unquote("@theme_selected_bg_color");
-  color: unquote("@theme_selected_fg_color");
-}
-
-.vh-source.active label {
-  color: unquote("@theme_selected_fg_color");
-  font-weight: bold;
-}
-
-// Keeps inactive rows' text aligned with the checkmark on active rows.
-.vh-check-spacer {
-  min-width: 14px;
-}
-
-.vh-chip {
+.vh-heading {
   font-size: 0.8em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  opacity: 0.6;
+}
+
+// Row titles share one width, so every control starts at the same x.
+.vh-key {
+  min-width: 66px;
+}
+
+.vh-value {
+  min-width: 44px;
+  font-feature-settings: "tnum";
+  opacity: 0.7;
+}
+
+.vh-status,
+.vh-note {
+  font-size: 0.85em;
+}
+
+.vh-disclose {
+  padding: 2px 4px;
 }
