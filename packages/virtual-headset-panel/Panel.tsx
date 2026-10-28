@@ -1,4 +1,5 @@
 import { Astal, Gtk, Gdk } from "ags/gtk4";
+import GLib from "gi://GLib";
 import { createComputed, createState, onCleanup } from "ags";
 import { execAsync, subprocess } from "ags/process";
 import { interval, timeout } from "ags/time";
@@ -24,6 +25,11 @@ import {
 
 const CTL = "virtual-headset-ctl";
 
+// The docs' screenshots (packages/virtual-headset-panel-screenshots) set a state
+// the panel can't be put in from outside: "advanced" opens Advanced, "keyboard"
+// focuses Strength with its keyboard ring showing.
+const SHOT = GLib.getenv("VIRTUAL_HEADSET_PANEL_SHOT");
+
 const run = (args: string[]) =>
   execAsync([CTL, ...args]).catch((err) =>
     console.error(`vh-panel: ${args.join(" ")}`, err),
@@ -40,7 +46,7 @@ export default function Panel() {
   const [level, setLevel] = createState(-Infinity);
   const [levelAt, setLevelAt] = createState(0);
   const [now, setNow] = createState(Date.now());
-  const [advanced, setAdvanced] = createState(false);
+  const [advanced, setAdvanced] = createState(SHOT === "advanced");
   const [test, setTest] = createState<
     "" | "recording" | "original" | "denoised"
   >("");
@@ -303,6 +309,13 @@ export default function Panel() {
               }
               $={(self) => {
                 name(self, "Strength");
+                if (SHOT === "keyboard")
+                  timeout(300, () => {
+                    self.grab_focus();
+                    (self.get_root() as Gtk.Window | null)?.set_focus_visible(
+                      true,
+                    );
+                  });
                 // Follow the daemon's value without sending it back; send a
                 // drag once it settles, not every step of it.
                 let syncing = false;

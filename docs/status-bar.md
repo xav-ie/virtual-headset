@@ -35,6 +35,10 @@ Styling and the other options are in
 `virtual-headset-panel` is an [AGS](https://github.com/aylur/ags) panel laid out
 like the [macOS one](macos.md#the-panel), in your desktop's theme:
 
+|                                                                                                                          Live                                                                                                                          |                                                                                           Muted                                                                                            |                                                                                                              Between calls                                                                                                              |
+| :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+| <img src="../assets/linux-panel/live.png" width="260" alt="The Linux panel in a call, live: a red mic and Live with a Mute button, the input set to soundcore Liberty 5 Pro with its level meter at -24 dB, and noise suppression on at Max strength"> | <img src="../assets/linux-panel/muted.png" width="260" alt="The Linux panel in a call, muted: a crossed-out mic and Muted with an Unmute button, and the status Mic released while muted"> | <img src="../assets/linux-panel/no-call.png" width="260" alt="The Linux panel between calls: Not in a call with an Unmute button, the input, noise suppression off, and the hint to choose Virtual_Headset_Microphone in the call app"> |
+
 - **The call** first: Live or Muted with the button that flips it, or "Not in a
   call" (the mute button stays: on Linux it gates the mic itself).
 - **Microphone:** which mic to forward, its level while the mic is open, and
@@ -42,6 +46,10 @@ like the [macOS one](macos.md#the-panel), in your desktop's theme:
 - **Noise suppression:** on or off, its strength, and a test that records 8 s
   of your mic, then plays it as it was or denoised.
 - **Advanced:** keep the mic open between calls, and restart the service.
+
+|                                                                                          Advanced                                                                                           |                                                           Keyboard                                                            |
+| :-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------------------------: |
+| <img src="../assets/linux-panel/advanced.png" width="260" alt="The Linux panel with Advanced open: Keep the mic open between calls, unticked, with its note, and a Restart service button"> | <img src="../assets/linux-panel/keyboard.png" width="260" alt="The Linux panel with a focus ring around the Strength slider"> |
 
 Tab and Shift-Tab move between controls with a visible focus ring, Space and
 Return press them, and Escape closes the panel. Screen readers get each

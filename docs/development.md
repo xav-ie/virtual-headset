@@ -22,6 +22,7 @@ nix fmt              # format everything
 | `packages/virtual-headset/`                              | the Linux daemon, and `virtual-headset-bridge` for Firefox (Rust) |
 | `packages/virtual-headset-ctl/`                          | the `virtual-headset-ctl` CLI (Nushell)                           |
 | `packages/virtual-headset-panel/`                        | the Linux desktop panel (AGS)                                     |
+| `packages/virtual-headset-panel-screenshots/`            | the Linux panel's docs screenshots (headless sway)                |
 | `packages/virtual-headset-firefox/`                      | packaging for the Firefox extension                               |
 | `packages/virtual-headset-macos/`                        | the macOS app (Swift)                                             |
 | `packages/virtual-headset-driver/`                       | the macOS Virtual_Headset_Microphone driver (BlackHole, renamed)  |
@@ -71,6 +72,7 @@ The diagrams are generated, never drawn by hand:
 ```sh
 node scripts/diagrams.mjs       # docs/diagrams/*.svg, and the diagram blocks in the docs
 node scripts/screenshots.mjs    # assets/panel/*.png and assets/screenshot.png (on a Mac)
+nix run .#virtual-headset-panel-screenshots -- assets/linux-panel   # the Linux panel (on Linux)
 ```
 
 - **Colors** come from [`assets/palette.json`](../assets/palette.json), a light and
@@ -93,6 +95,13 @@ node scripts/screenshots.mjs    # assets/panel/*.png and assets/screenshot.png (
   <dir>` with sample values, and a mock desktop around it rendered by headless
   Chrome. Each panel state flashes in the corner of your screen while it's
   captured.
+- **Linux panel screenshots** are the real AGS panel, fed sample state by a stub
+  `virtual-headset-ctl`, in a headless sway with a throwaway runtime dir, home
+  and D-Bus session, then trimmed and optimized with oxipng
+  ([`packages/virtual-headset-panel-screenshots`](../packages/virtual-headset-panel-screenshots/default.nix)).
+  States the panel can't be put in from outside (Advanced open, keyboard focus)
+  come from its `VIRTUAL_HEADSET_PANEL_SHOT` variable. To run it from a Mac,
+  build it with a Linux builder and run it on that machine.
 
 ## Releases
 
