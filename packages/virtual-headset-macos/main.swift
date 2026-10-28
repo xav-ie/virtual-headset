@@ -1425,7 +1425,7 @@ final class Controller: NSObject, NSSoundDelegate {
     let buttons = NSStackView(views: [
       button(
         recording ? "8 s…" : "Record", "record.circle", #selector(record),
-        enabled: !recording && capture != nil),
+        enabled: !recording),
       button(
         "Original", playing == "raw" ? "stop.fill" : "play.fill", #selector(playRaw),
         enabled: haveTakes),
@@ -1454,12 +1454,25 @@ final class Controller: NSObject, NSSoundDelegate {
     playTime.stringValue = String(format: "%.1f s", sound.currentTime)
   }
   @objc func seek(_ s: NSSlider) { sound?.currentTime = s.doubleValue }
+  // Records from the live capture, or, while the mic is closed (between calls, or
+  // muted), opens the mic just for the take.
   @objc func record() {
-    guard let capture else { return }
+    var borrowed: Capture?
+    if capture == nil {
+      guard case .success(let cfg) = desired(), let c = Capture(uid: cfg.uid, sink: { _ in }) else {
+        status = "Can't open the mic to record"
+        buildContent()
+        return
+      }
+      borrowed = c
+    }
+    guard let source = capture ?? borrowed else { return }
     stopPlayback()
     recording = true
     buildContent()
-    capture.record(seconds: 8) { [weak self] data in
+    source.record(seconds: 8) { [weak self] data in
+      borrowed?.stop()
+      borrowed = nil  // the take's callback held it
       guard let self else { return }
       try? data.write(to: URL(fileURLWithPath: self.takes["pcm"]!))
       self.render(self.takes["pcm"]!, self.takes["raw"]!, filters: nil)
