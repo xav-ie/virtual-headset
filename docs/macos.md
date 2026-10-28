@@ -56,7 +56,8 @@ To start it at login, run that last path from a launchd agent with `KeepAlive`
 
 Then in your call app choose **Virtual_Headset_Microphone** as the mic, and in
 Zoom turn on **Settings → Audio → Sync buttons on headset** and connect
-**Virtual_Headset**. Zoom's desktop app and Zoom in Chrome both work.
+**Virtual_Headset**. Zoom's desktop app and Zoom in Chrome both work; for Zoom
+or Meet in Firefox, add [the extension](browser-extension.md).
 
 ## The panel
 

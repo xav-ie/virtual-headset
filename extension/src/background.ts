@@ -21,6 +21,11 @@ const HOST_NAME = "virtual_headset_bridge";
 // Long-lived ports to content scripts that have found a live mute control.
 const contentPorts = new Set<browser.runtime.Port>();
 
+// Tell the host whether any meeting tab is open, when that changes.
+function reportCall(): void {
+  sendToHost({ type: "call", active: contentPorts.size > 0 });
+}
+
 let host: browser.runtime.Port | null = null;
 
 // Reflect the agreed state on the toolbar icon + tooltip.
@@ -53,6 +58,7 @@ function applyToWeb(muted: boolean): void {
       port.postMessage(cmd);
     } catch {
       contentPorts.delete(port);
+      if (contentPorts.size === 0) reportCall();
     }
   }
 }
@@ -114,6 +120,7 @@ function connectHost(): void {
   });
 
   // Ask for the current state + source list up front.
+  reportCall();
   sendToHost({ type: "query" });
   sendToHost({ type: "listSources" });
 }
@@ -125,6 +132,7 @@ function connectHost(): void {
 browser.runtime.onConnect.addListener((port) => {
   if (port.name !== "vh-content") return;
   contentPorts.add(port);
+  if (contentPorts.size === 1) reportCall();
 
   port.onMessage.addListener((raw) => {
     const msg = raw as ContentMessage;
@@ -144,7 +152,10 @@ browser.runtime.onConnect.addListener((port) => {
     }
   });
 
-  port.onDisconnect.addListener(() => contentPorts.delete(port));
+  port.onDisconnect.addListener(() => {
+    contentPorts.delete(port);
+    if (contentPorts.size === 0) reportCall();
+  });
 });
 
 // ---------------------------------------------------------------------------

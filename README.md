@@ -58,7 +58,7 @@ and from then on treats them as one headset.
 <!-- diagram:capabilities -->
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/capabilities-dark.svg">
-  <img src="docs/diagrams/capabilities.svg" alt="One app, everything around your mic. Around Virtual Headset, a headset made in software: Zoom and Meet (mute in sync, web or desktop); Any mic (built-in, USB or Bluetooth); Stereo while muted (Bluetooth headsets (macOS)); Nix modules (for NixOS and nix-darwin); Scriptable (CLI, D-Bus or state files); Firefox (via an extension (Linux)); Noise removed (on your own Mac (macOS)); Mute from anywhere (a key, your bar, a panel)">
+  <img src="docs/diagrams/capabilities.svg" alt="One app, everything around your mic. Around Virtual Headset, a headset made in software: Zoom and Meet (mute in sync, web or desktop); Any mic (built-in, USB or Bluetooth); Stereo while muted (Bluetooth headsets (macOS)); Nix modules (for NixOS and nix-darwin); Scriptable (CLI, D-Bus or state files); Firefox (via an extension); Noise removed (on your own Mac (macOS)); Mute from anywhere (a key, your bar, a panel)">
 </picture>
 <!-- /diagram:capabilities -->
 
@@ -103,13 +103,13 @@ toggle-mute` on macOS. Bind it to a key.
 
 ## Mute from anywhere
 
-| Where           | Linux                                                                    | macOS                                                                |
-| --------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| **Keyboard**    | bind `virtual-headset-ctl toggle-mute`                                   | bind `virtual-headset toggle-mute` (skhd, Raycast, …)                |
-| **Your bar**    | [Waybar, i3 or Polybar](docs/status-bar.md)                              | [any menu bar tool](docs/macos.md#your-menu-bar), e.g. SketchyBar    |
-| **A panel**     | the [desktop panel](docs/status-bar.md#desktop-panel), with a mic picker | the [settings panel](docs/macos.md#the-panel)                        |
-| **The browser** | the [Firefox extension](docs/browser-extension.md)                       | Chrome's own headset support                                         |
-| **Scripts**     | `virtual-headset-ctl` or [D-Bus](docs/usage.md#d-bus)                    | `virtual-headset` and [its state files](docs/macos.md#your-menu-bar) |
+| Where           | Linux                                                                    | macOS                                                                               |
+| --------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| **Keyboard**    | bind `virtual-headset-ctl toggle-mute`                                   | bind `virtual-headset toggle-mute` (skhd, Raycast, …)                               |
+| **Your bar**    | [Waybar, i3 or Polybar](docs/status-bar.md)                              | [any menu bar tool](docs/macos.md#your-menu-bar), e.g. SketchyBar                   |
+| **A panel**     | the [desktop panel](docs/status-bar.md#desktop-panel), with a mic picker | the [settings panel](docs/macos.md#the-panel)                                       |
+| **The browser** | the [Firefox extension](docs/browser-extension.md)                       | Chrome's own headset support, or the [Firefox extension](docs/browser-extension.md) |
+| **Scripts**     | `virtual-headset-ctl` or [D-Bus](docs/usage.md#d-bus)                    | `virtual-headset` and [its state files](docs/macos.md#your-menu-bar)                |
 
 <!-- diagram:mute-anywhere -->
 <picture>

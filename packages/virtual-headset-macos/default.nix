@@ -54,6 +54,9 @@ stdenv.mkDerivation {
     EOF
     mkdir -p $out/bin
     ln -s "$app/Contents/MacOS/virtual-headset" $out/bin/virtual-headset
+    # Firefox's native-messaging host: a manifest names one executable, no arguments.
+    printf '#!/bin/sh\nexec "%s" bridge\n' "$app/Contents/MacOS/virtual-headset" > $out/bin/virtual-headset-bridge
+    chmod +x $out/bin/virtual-headset-bridge
     runHook postInstall
   '';
 
