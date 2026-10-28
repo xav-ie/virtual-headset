@@ -411,13 +411,13 @@ const diagrams = {
       "One app, everything around your mic",
       "what Virtual Headset does for you, on Linux and macOS unless marked",
     );
-    const [rx, ry, bw, bh] = [380, 172, 240, 96];
+    const [rx, ry, bw, bh] = [380, 210, 240, 128];
     const [cx, cy] = [W / 2, h.top + ry + bh / 2];
     const hub = {
       x: cx - 130,
-      y: cy - 62,
+      y: cy - 70,
       w: 260,
-      h: 124,
+      h: 140,
       ...headset,
       text: ["Virtual Headset", "a headset made in software"],
     };
