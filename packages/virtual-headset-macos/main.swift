@@ -563,14 +563,20 @@ final class DeepFilter {
     set { ctl[0] = newValue }  // read by the plugin on its next run(); a benign race
   }
 
+  // One instance outlives each capture (see Controller.deepFilter), so a stopping
+  // capture's last buffers can overlap the next one's first: serialize run().
+  let lock = OSAllocatedUnfairLock()
+
   func process(_ x: UnsafeMutableBufferPointer<Float>) {
-    var i = 0
-    while i < x.count {
-      let n = min(DeepFilter.cap, x.count - i)
-      inBuf.update(from: x.baseAddress! + i, count: n)
-      d.run(h, UInt(n))
-      (x.baseAddress! + i).update(from: outBuf, count: n)
-      i += n
+    lock.withLock {
+      var i = 0
+      while i < x.count {
+        let n = min(DeepFilter.cap, x.count - i)
+        inBuf.update(from: x.baseAddress! + i, count: n)
+        d.run(h, UInt(n))
+        (x.baseAddress! + i).update(from: outBuf, count: n)
+        i += n
+      }
     }
   }
 
@@ -665,6 +671,8 @@ final class Controller: NSObject, NSSoundDelegate {
   var scrim: Scrim?
   var capture: Capture?
   var bhOut: BlackHoleOut?
+  // Loaded once (~260 ms) and kept across captures, so an unmute doesn't wait
+  // on it; prewarmed at launch while noise suppression is on.
   var deepFilter: DeepFilter?
   var running: Config?
   var status = "Off"
@@ -730,6 +738,13 @@ final class Controller: NSObject, NSSoundDelegate {
       self?.ring.isHidden = true
     }
     guard live else { return }
+    if denoise, model == "dfn" {
+      let limit = Float(mix * 100)
+      DispatchQueue.global(qos: .utility).async {
+        let df = DeepFilter(limitDB: limit)
+        DispatchQueue.main.async { if self.deepFilter == nil { self.deepFilter = df } }
+      }
+    }
 
     DistributedNotificationCenter.default().addObserver(forName: TOGGLE, object: nil, queue: .main)
     {
@@ -932,11 +947,12 @@ final class Controller: NSObject, NSSoundDelegate {
         chunk.withUnsafeMutableBytes { post.feed($0.bindMemory(to: Float.self)) }
       }
     } else {
-      guard let df = DeepFilter(limitDB: Float(mix * 100)) else {
+      guard let df = deepFilter ?? DeepFilter(limitDB: Float(mix * 100)) else {
         stop()
         status = "Can't load DeepFilterNet"
         return
       }
+      df.limitDB = Float(mix * 100)
       deepFilter = df
       sink = { data in
         var chunk = data
@@ -973,7 +989,6 @@ final class Controller: NSObject, NSSoundDelegate {
     capture = nil
     bhOut?.stop()
     bhOut = nil
-    deepFilter = nil
     let dead = procs
     procs = []
     running = nil
