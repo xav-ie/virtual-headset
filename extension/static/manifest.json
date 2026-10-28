@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Virtual Headset Bridge",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Keeps the Virtual Headset mute button in sync with the Zoom and Google Meet web apps, on Linux and macOS, through a native-messaging bridge.",
 
   "browser_specific_settings": {

@@ -1,5 +1,14 @@
 # virtual-headset
 
+## 0.4.0
+
+### Minor Changes
+
+- f41b81a: Add a nix-darwin module (`darwinModules.default`): `services.virtual-headset.enable` runs the macOS app at login, puts `virtual-headset` on your `PATH`, and installs the Virtual_Headset_Microphone driver. The app now has microphone access by entitlement, since apps can't show macOS's permission prompt under the boot argument it needs.
+- 5b82b4f: The Firefox extension now works on macOS. `virtual-headset bridge` is its native-messaging host there, speaking the same protocol as on Linux, and a Zoom or Meet tab in Firefox becomes the call: the menu bar and panel show its mute, the mic is released while it's muted, and your mute key clicks the tab's mic button. Register the host with `services.virtual-headset.firefox = true` (nix-darwin), the Home Manager module, or `install-native-host.sh`.
+- 8f32bfb: Add macOS support: one agent forwards your mic (optionally denoised with DeepFilterNet 3 or RNNoise) into a `Virtual_Headset_Microphone` loopback device and presents the `Virtual_Headset` HID telephony headset that Zoom and Meet sync mute with. While the call is muted it releases the real mic, so Bluetooth headsets switch back from hands-free to stereo. See `docs/macos.md`.
+- b82f268: Add `virtual-headset-ctl ptt-press` and `ptt-release` for a push-to-talk key: holding it talks until release, while a tap (under 300 ms) keeps the mic unmuted until the next press.
+
 ## 0.3.0
 
 ### Minor Changes
