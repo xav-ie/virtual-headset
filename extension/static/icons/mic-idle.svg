@@ -1,10 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96">
-  <!-- State unknown / host not connected — gray, no strikethrough. -->
-  <rect width="96" height="96" rx="20" fill="#2b2f3a"/>
-  <g fill="#9aa0a6" stroke="#9aa0a6">
-    <rect x="37" y="16" width="22" height="42" rx="11" stroke="none"/>
-    <path d="M29 46 a19 19 0 0 0 38 0" fill="none" stroke-width="7" stroke-linecap="round"/>
-    <rect x="44.5" y="64" width="7" height="13" rx="3.5" stroke="none"/>
-    <rect x="34" y="77" width="28" height="7" rx="3.5" stroke="none"/>
-  </g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96"><rect width="96" height="96" fill="#2b2f3a" rx="20"/><g fill="#9aa0a6" stroke="#9aa0a6"><rect width="22" height="42" x="37" y="16" stroke="none" rx="11"/><path fill="none" stroke-linecap="round" stroke-width="7" d="M29 46 a19 19 0 0 0 38 0"/><rect width="7" height="13" x="44.5" y="64" stroke="none" rx="3.5"/><rect width="28" height="7" x="34" y="77" stroke="none" rx="3.5"/></g></svg>
