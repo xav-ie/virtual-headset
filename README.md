@@ -44,14 +44,14 @@ updates all of them too.
 <!-- diagram:how-it-works -->
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/how-it-works-dark.svg">
-  <img src="docs/diagrams/how-it-works.svg" alt="Virtual Headset sits between you and the call app. Your mic (built-in, USB or Bluetooth) feeds Virtual_Headset_Microphone, your mic with background noise optionally removed, which Zoom or Meet records your voice from. Your mute key, status bar, panel or browser drive Virtual_Headset, which the call app sees as a USB telephony headset: it sends the call app a mute button press, and the call app lights its mute light back, so the call app's own mute button stays in sync with yours">
+  <img src="docs/diagrams/how-it-works.svg" alt="Your call app thinks you plugged in a headset, so its mute and yours are the same button. Your mic (built-in, USB or Bluetooth) sends your voice to Virtual Headset, a headset made in software, which passes it on to Zoom or Meet. Your mute controls (a key, your menu or status bar, a panel, the browser) press its mute button, which Zoom or Meet obeys; the call app answers with the headset's mute light, which your controls show">
 </picture>
 <!-- /diagram:how-it-works -->
 
-Virtual Headset gives your call app two things: a microphone,
-**Virtual_Headset_Microphone**, that carries your real mic, and a headset,
-**Virtual_Headset**, whose mute button the call app listens to. Zoom pairs the
-two because their names match, and from then on it treats them as one headset.
+In your call app's settings, the headset shows up as two devices:
+**Virtual_Headset_Microphone**, the mic carrying your voice, and
+**Virtual_Headset**, its mute button. Zoom pairs them because their names match,
+and from then on treats them as one headset.
 
 ## Quick start
 
@@ -102,24 +102,23 @@ toggle-mute` on macOS. Bind it to a key.
 | **The browser** | the [Firefox extension](docs/browser-extension.md)                       | Chrome's own headset support                                         |
 | **Scripts**     | `virtual-headset-ctl` or [D-Bus](docs/usage.md#d-bus)                    | `virtual-headset` and [its state files](docs/macos.md#your-menu-bar) |
 
-<!-- diagram:mute-round-trip -->
+<!-- diagram:mute-loop -->
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/mute-round-trip-dark.svg">
-  <img src="docs/diagrams/mute-round-trip.svg" alt="One mute, start to finish: you press mute with a key, your status bar, the panel or the browser toolbar; Virtual_Headset presses its mute button, the button of a telephony headset that Zoom and Meet obey; Zoom or Meet mutes exactly as if you had clicked its own mic button; it lights the headset's mute light, which it also does when you mute inside the call app; every indicator follows, and on macOS the real mic is also released">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/mute-loop-dark.svg">
+  <img src="docs/diagrams/mute-loop.svg" alt="Mute from anywhere, and everything agrees. 1: you press mute with a key, your menu or status bar, a panel or the browser. 2: Virtual Headset presses its mute button, and Zoom or Meet mutes itself as for a real headset. 3: the call app lights the headset's mute light. 4: your controls show muted. Mute inside Zoom or Meet instead, and it starts at 3">
 </picture>
-<!-- /diagram:mute-round-trip -->
+<!-- /diagram:mute-loop -->
 
 ## Stereo while you're muted, on macOS
 
-A Bluetooth headset can play stereo or carry your voice, not both: as soon as
-anything opens its mic, macOS switches it to hands-free audio, which sounds like
-a phone call. Virtual Headset only holds the mic while you're live, so for most
-of a meeting, while you're listening, you hear it properly.
+A Bluetooth headset can't play stereo and carry your voice at the same time, so
+whenever an app holds its mic, macOS switches it to mono call audio. Most call
+apps hold the mic for the whole meeting; Virtual Headset only while you're live:
 
 <!-- diagram:bluetooth -->
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/bluetooth-dark.svg">
-  <img src="docs/diagrams/bluetooth.svg" alt="A Bluetooth headset on macOS during a call. While your call is muted your real mic is closed and you hear stereo. When you unmute, the mic opens and the headset switches to hands-free: mono, 16 kHz. When you mute again the mic closes, and about 2 seconds later macOS switches the headset back to stereo">
+  <img src="docs/diagrams/bluetooth.svg" alt="Muted, you hear full stereo: a Bluetooth headset only drops to call audio while your mic is open, and Virtual Headset opens it only while you're live. While you're muted your mic is off and you hear full stereo. When you unmute, the mic turns on and the headset switches to call audio, which is mono, and your first word may clip while it switches. When you mute, the mic turns off, and about 2 seconds later stereo is back">
 </picture>
 <!-- /diagram:bluetooth -->
 

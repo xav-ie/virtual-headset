@@ -23,17 +23,16 @@ this page is the reference for scripting it.
 
 ## Mute
 
-<!-- diagram:mute-round-trip -->
+<!-- diagram:mute-loop -->
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="diagrams/mute-round-trip-dark.svg">
-  <img src="diagrams/mute-round-trip.svg" alt="One mute, start to finish: you press mute with a key, your status bar, the panel or the browser toolbar; Virtual_Headset presses its mute button, the button of a telephony headset that Zoom and Meet obey; Zoom or Meet mutes exactly as if you had clicked its own mic button; it lights the headset's mute light, which it also does when you mute inside the call app; every indicator follows, and on macOS the real mic is also released">
+  <source media="(prefers-color-scheme: dark)" srcset="diagrams/mute-loop-dark.svg">
+  <img src="diagrams/mute-loop.svg" alt="Mute from anywhere, and everything agrees. 1: you press mute with a key, your menu or status bar, a panel or the browser. 2: Virtual Headset presses its mute button, and Zoom or Meet mutes itself as for a real headset. 3: the call app lights the headset's mute light. 4: your controls show muted. Mute inside Zoom or Meet instead, and it starts at 3">
 </picture>
-<!-- /diagram:mute-round-trip -->
+<!-- /diagram:mute-loop -->
 
 A mute press is a headset's button press, so the call app decides what it
-means: if you're live it mutes, if you're muted it unmutes. Mute in the call
-app itself and the headset's mute light tells every indicator. On Linux,
-Virtual Headset starts **muted** after login.
+means: if you're live it mutes, if you're muted it unmutes. On Linux, Virtual
+Headset starts **muted** after login.
 
 **Push to talk** (Linux): bind `virtual-headset-ctl ptt-press` to a key's press
 and `ptt-release` to its release. Hold the key to talk; tap it (under 300 ms) to

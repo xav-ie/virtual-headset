@@ -3,7 +3,7 @@
 <!-- diagram:how-it-works -->
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="diagrams/how-it-works-dark.svg">
-  <img src="diagrams/how-it-works.svg" alt="Virtual Headset sits between you and the call app. Your mic (built-in, USB or Bluetooth) feeds Virtual_Headset_Microphone, your mic with background noise optionally removed, which Zoom or Meet records your voice from. Your mute key, status bar, panel or browser drive Virtual_Headset, which the call app sees as a USB telephony headset: it sends the call app a mute button press, and the call app lights its mute light back, so the call app's own mute button stays in sync with yours">
+  <img src="diagrams/how-it-works.svg" alt="Your call app thinks you plugged in a headset, so its mute and yours are the same button. Your mic (built-in, USB or Bluetooth) sends your voice to Virtual Headset, a headset made in software, which passes it on to Zoom or Meet. Your mute controls (a key, your menu or status bar, a panel, the browser) press its mute button, which Zoom or Meet obeys; the call app answers with the headset's mute light, which your controls show">
 </picture>
 <!-- /diagram:how-it-works -->
 
@@ -36,14 +36,14 @@ Both platforms present the same device, posing as a Jabra Evolve2 65 (vendor
 A mute press is a 0 → 1 → 0 pulse on the relative mute bit, with the hook bit
 held at 1 (in a call). The call app toggles its own mute and answers on report 2,
 which is how every indicator learns the real state, including when you mute in
-the app.
+the app. In the loop below, step 2 is report 1 and step 3 is report 2:
 
-<!-- diagram:mute-round-trip -->
+<!-- diagram:mute-loop -->
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="diagrams/mute-round-trip-dark.svg">
-  <img src="diagrams/mute-round-trip.svg" alt="One mute, start to finish: you press mute with a key, your status bar, the panel or the browser toolbar; Virtual_Headset presses its mute button, the button of a telephony headset that Zoom and Meet obey; Zoom or Meet mutes exactly as if you had clicked its own mic button; it lights the headset's mute light, which it also does when you mute inside the call app; every indicator follows, and on macOS the real mic is also released">
+  <source media="(prefers-color-scheme: dark)" srcset="diagrams/mute-loop-dark.svg">
+  <img src="diagrams/mute-loop.svg" alt="Mute from anywhere, and everything agrees. 1: you press mute with a key, your menu or status bar, a panel or the browser. 2: Virtual Headset presses its mute button, and Zoom or Meet mutes itself as for a real headset. 3: the call app lights the headset's mute light. 4: your controls show muted. Mute inside Zoom or Meet instead, and it starts at 3">
 </picture>
-<!-- /diagram:mute-round-trip -->
+<!-- /diagram:mute-loop -->
 
 ## Why Zoom trusts it
 
@@ -59,13 +59,6 @@ whichever mic you already use. Google Meet doesn't check names, so with Meet any
 mic works.
 
 ## Linux
-
-<!-- diagram:control-paths -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="diagrams/control-paths-dark.svg">
-  <img src="diagrams/control-paths.svg" alt="How the Linux controls connect: virtual-headset-ctl writes HID output report 3 (mute, unmute or toggle) to the Virtual_Headset device at /dev/hidraw*; the virtual-headset daemon reads it, presses the headset's mute button for the call app, and announces MuteChanged on D-Bus, which Waybar, i3, Polybar, the panel and the Firefox bridge all follow">
-</picture>
-<!-- /diagram:control-paths -->
 
 - **The headset** is made with `/dev/uhid`, so the kernel and the browser see it
   as `/dev/hidraw*`.
@@ -96,14 +89,8 @@ mic works.
   captures your mic, optionally denoises it with DeepFilterNet 3 (in process) or
   RNNoise (through ffmpeg), and plays it into the driver.
 - **While the call is muted** the app closes your real mic, so a Bluetooth
-  headset can return to stereo:
-
-<!-- diagram:bluetooth -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="diagrams/bluetooth-dark.svg">
-  <img src="diagrams/bluetooth.svg" alt="A Bluetooth headset on macOS during a call. While your call is muted your real mic is closed and you hear stereo. When you unmute, the mic opens and the headset switches to hands-free: mono, 16 kHz. When you mute again the mic closes, and about 2 seconds later macOS switches the headset back to stereo">
-</picture>
-<!-- /diagram:bluetooth -->
+  headset can return to stereo (see [Bluetooth
+  headsets](macos.md#bluetooth-headsets)).
 
 - **Control** is the `virtual-headset` command, which messages the running app;
   its state goes to files in `~/.cache/virtual-headset` and a distributed

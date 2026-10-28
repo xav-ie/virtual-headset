@@ -12,7 +12,7 @@ gap, on Linux, and keeps mute in sync both ways:
 <!-- diagram:firefox-bridge -->
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="diagrams/firefox-bridge-dark.svg">
-  <img src="diagrams/firefox-bridge.svg" alt="Firefox has no WebHID, so a bridge carries mute both ways. A mute key or virtual-headset-ctl tells the virtual-headset daemon, which announces MuteChanged on D-Bus and takes Mute and Toggle calls there. virtual-headset-bridge, the native-messaging host, relays between D-Bus and the Firefox extension, sending it the state and taking its commands. The extension clicks the Zoom or Meet tab's own mic button and reads its state back">
+  <img src="diagrams/firefox-bridge.svg" alt="Firefox can't use headsets, so the extension presses the button for you. Virtual Headset, which knows whether you're muted, talks through a helper that lets Firefox reach it to the Firefox extension, a mic in your toolbar. The extension clicks the Zoom or Meet tab's own mic button, and reads it back so Virtual Headset knows when you click it yourself">
 </picture>
 <!-- /diagram:firefox-bridge -->
 

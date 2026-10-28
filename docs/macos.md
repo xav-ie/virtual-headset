@@ -8,6 +8,8 @@ Zoom and Meet sync with.
 - [Install](#install)
 - [The panel](#the-panel)
 - [Noise suppression](#noise-suppression)
+- [Advanced](#advanced)
+- [Keyboard and VoiceOver](#keyboard-and-voiceover)
 - [Bluetooth headsets](#bluetooth-headsets)
 - [Your menu bar](#your-menu-bar)
 - [Why the boot argument](#why-the-boot-argument)
@@ -61,18 +63,17 @@ Zoom turn on **Settings → Audio → Sync buttons on headset** and connect
 `virtual-headset panel` opens the settings panel; bind it to a key or a
 [menu bar item](#your-menu-bar). In a call it leads with the call's mic:
 
-|                                                                                                                             Live                                                                                                                              |                                                                                              Muted                                                                                              |                                                                     Between calls                                                                     |
-| :-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------------------------------------------------: |
-| <img src="../assets/panel/live.png" width="260" alt="The panel in a call, live: a red mic and Live with a Mute button, the input set to Default with its level meter, Only while in use ticked, Using AirPods Pro, and noise suppression on at Max strength"> | <img src="../assets/panel/muted.png" width="260" alt="The panel in a call, muted: a grey crossed-out mic and Muted with an Unmute button, and the status Mic released while the call is muted"> | <img src="../assets/panel/no-call.png" width="260" alt="The panel between calls: Not in a call, the input set to Default, and noise suppression off"> |
+|                                                                                                                Live                                                                                                                 |                                                                                              Muted                                                                                              |                                                                     Between calls                                                                     |
+| :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------------------------------------------------: |
+| <img src="../assets/panel/live.png" width="260" alt="The panel in a call, live: a red mic and Live with a Mute button, the input set to Default with its level meter, Using AirPods Pro, and noise suppression on at Max strength"> | <img src="../assets/panel/muted.png" width="260" alt="The panel in a call, muted: a grey crossed-out mic and Muted with an Unmute button, and the status Mic released while the call is muted"> | <img src="../assets/panel/no-call.png" width="260" alt="The panel between calls: Not in a call, the input set to Default, and noise suppression off"> |
 
 - **Live / Muted** is the call's own mute state, read from the headset's mute
   light, and the button presses the headset's mute button.
 - **Input** is the mic to forward. **Default** follows macOS's input, so
   plugging in a headset just works; the line under it says which mic is in use.
-- **Level** shows while the mic is open.
-- **Only while in use** opens your mic only while an app records from
-  Virtual_Headset_Microphone, so the mic, and macOS's orange mic-in-use dot, stay
-  off the rest of the time. It's on unless you turn it off.
+- **Level** shows while the mic is open. Your mic opens only while an app
+  records from Virtual_Headset_Microphone, so between calls it, and macOS's
+  orange mic-in-use dot, stay off.
 
 ## Noise suppression
 
@@ -86,28 +87,62 @@ of one core, and adds about 20 ms of delay.
 - **Test** records 8 seconds of your raw mic, then plays it back as it was or
   through your current settings. Change a setting and play it again to compare
   the same take.
-- **Advanced** picks the engine (DeepFilterNet 3, or one of five
-  [RNNoise](https://github.com/xiph/rnnoise) models) and a noise gate that
-  silences the gaps between words. Both scored worse in our speech-quality
-  benchmarks, so they're tucked away.
 
 Turned off, your mic goes through untouched.
+
+## Advanced
+
+<img align="right" src="../assets/panel/advanced.png" width="260" alt="The panel with Advanced open: Keep the mic open between calls, unticked, with its note, then Model set to DeepFilterNet 3 and Gate off">
+
+Settings almost nobody should change, at the bottom of the panel:
+
+- **Keep the mic open between calls.** Calls start a moment sooner, but your mic
+  stays in use, and a Bluetooth headset stays in call audio, even while nothing
+  is listening. Off by default.
+- **Model** picks the noise suppression engine: DeepFilterNet 3, or one of five
+  [RNNoise](https://github.com/xiph/rnnoise) models.
+- **Gate** silences the gaps between your words.
+
+Model and Gate show while noise suppression is on. RNNoise and the gate both
+scored worse in our speech-quality benchmarks, which is why they're here.
+
+<br clear="right">
+
+## Keyboard and VoiceOver
+
+<img align="right" src="../assets/panel/keyboard.png" width="260" alt="The panel with a white focus ring around the Strength slider">
+
+The panel takes the keyboard while it's open, whether or not macOS's Keyboard
+navigation setting is on:
+
+| Key                  |                           |
+| -------------------- | ------------------------- |
+| Tab, Shift-Tab, ↑, ↓ | move between controls     |
+| Space, Return        | press the focused control |
+| ←, →                 | adjust the focused slider |
+| Escape, ⌘W           | close the panel           |
+
+A ring marks the focused control once you use the keyboard, and goes away when
+you click. VoiceOver reads each control by its row's name ("Input",
+"Strength"), the mute button as "Mute the call" or "Unmute the call", and
+whether Advanced is open.
+
+<br clear="right">
 
 ## Bluetooth headsets
 
 <!-- diagram:bluetooth -->
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="diagrams/bluetooth-dark.svg">
-  <img src="diagrams/bluetooth.svg" alt="A Bluetooth headset on macOS during a call. While your call is muted your real mic is closed and you hear stereo. When you unmute, the mic opens and the headset switches to hands-free: mono, 16 kHz. When you mute again the mic closes, and about 2 seconds later macOS switches the headset back to stereo">
+  <img src="diagrams/bluetooth.svg" alt="Muted, you hear full stereo: a Bluetooth headset only drops to call audio while your mic is open, and Virtual Headset opens it only while you're live. While you're muted your mic is off and you hear full stereo. When you unmute, the mic turns on and the headset switches to call audio, which is mono, and your first word may clip while it switches. When you mute, the mic turns off, and about 2 seconds later stereo is back">
 </picture>
 <!-- /diagram:bluetooth -->
 
 macOS can't play stereo to a Bluetooth headset and record from its mic at the
-same time: while anything uses the mic, the headset drops to hands-free audio,
-which is mono and sounds like a phone line. Because Virtual Headset only opens
-your mic while the call is live, you hear stereo whenever you're muted. macOS
-takes about 2 seconds to switch back after you mute, and your first word after
-unmuting can be clipped while the headset switches.
+same time, so the headset's sound follows its mic, not your call. A call app
+holding the mic keeps you on mono call audio for the whole meeting; Virtual
+Headset closes the mic whenever you're muted, so you're back to stereo within a
+couple of seconds of muting.
 
 ## Your menu bar
 
