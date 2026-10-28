@@ -3,7 +3,7 @@
 <!-- diagram:how-it-works -->
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="diagrams/how-it-works-dark.svg">
-  <img src="diagrams/how-it-works.svg" alt="Your call app thinks you plugged in a headset, so its mute and yours are the same button. Your mic (built-in, USB or Bluetooth) sends your voice to Virtual Headset, a headset made in software, which passes it on to Zoom or Meet. Your mute controls (a key, your menu or status bar, a panel, the browser) press its mute button, which Zoom or Meet obeys; the call app answers with the headset's mute light, which your controls show">
+  <img src="diagrams/how-it-works.svg" alt="Zoom and Meet only obey a headset's mute button, and Virtual Headset gives your mic one: your call app sees an ordinary USB headset. Your voice goes from your mic (built-in, USB or Bluetooth) into Virtual Headset's microphone, with noise removed if you like, and Zoom or Meet hears you as from any headset. Your mute key (or menu bar, panel or browser) presses Virtual Headset's mute button, and Zoom or Meet mutes as if you'd clicked its own button, then tells your menu bar and panel you're muted">
 </picture>
 <!-- /diagram:how-it-works -->
 
@@ -36,14 +36,7 @@ Both platforms present the same device, posing as a Jabra Evolve2 65 (vendor
 A mute press is a 0 → 1 → 0 pulse on the relative mute bit, with the hook bit
 held at 1 (in a call). The call app toggles its own mute and answers on report 2,
 which is how every indicator learns the real state, including when you mute in
-the app. In the loop below, step 2 is report 1 and step 3 is report 2:
-
-<!-- diagram:mute-loop -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="diagrams/mute-loop-dark.svg">
-  <img src="diagrams/mute-loop.svg" alt="Mute from anywhere, and everything agrees. 1: you press mute with a key, your menu or status bar, a panel or the browser. 2: Virtual Headset presses its mute button, and Zoom or Meet mutes itself as for a real headset. 3: the call app lights the headset's mute light. 4: your controls show muted. Mute inside Zoom or Meet instead, and it starts at 3">
-</picture>
-<!-- /diagram:mute-loop -->
+the app.
 
 ## Why Zoom trusts it
 

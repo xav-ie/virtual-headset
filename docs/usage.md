@@ -23,12 +23,12 @@ this page is the reference for scripting it.
 
 ## Mute
 
-<!-- diagram:mute-loop -->
+<!-- diagram:mute-anywhere -->
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="diagrams/mute-loop-dark.svg">
-  <img src="diagrams/mute-loop.svg" alt="Mute from anywhere, and everything agrees. 1: you press mute with a key, your menu or status bar, a panel or the browser. 2: Virtual Headset presses its mute button, and Zoom or Meet mutes itself as for a real headset. 3: the call app lights the headset's mute light. 4: your controls show muted. Mute inside Zoom or Meet instead, and it starts at 3">
+  <source media="(prefers-color-scheme: dark)" srcset="diagrams/mute-anywhere-dark.svg">
+  <img src="diagrams/mute-anywhere.svg" alt="Mute from anywhere, and everything agrees. Press mute anywhere (a key, your menu or status bar, the panel, the Firefox toolbar, or Zoom or Meet's own button), and Zoom or Meet mutes: it's the one place mute is decided. It then shows everywhere: your menu or status bar, the panel, the Firefox toolbar, and Zoom or Meet">
 </picture>
-<!-- /diagram:mute-loop -->
+<!-- /diagram:mute-anywhere -->
 
 A mute press is a headset's button press, so the call app decides what it
 means: if you're live it mutes, if you're muted it unmutes. On Linux, Virtual

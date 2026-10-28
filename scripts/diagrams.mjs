@@ -111,6 +111,10 @@ const GLYPHS = {
   plug: "M-7 -20v10M7 -20v10M-13 -10h26v8a13 13 0 0 1 -26 0zM0 11v10",
   puzzle:
     "M-16 -16h10a5 5 0 1 1 10 0h12v12a5 5 0 1 0 0 10v12h-12a5 5 0 1 1 -10 0h-10z",
+  button:
+    "M0 -18a18 18 0 1 1 0 36a18 18 0 1 1 0 -36zM0 -8a8 8 0 1 1 0 16a8 8 0 1 1 0 -16z",
+  muted:
+    "M-6 -20h12v18a6 6 0 0 1 -12 0zM-6 -20a6 6 0 0 1 12 0M-13 -4a13 13 0 0 0 26 0M0 9v11M-8 20h16M-18 -18L18 18",
 };
 const glyph = (name, x, y, live = false) =>
   `<path class="${live ? "ink-live" : "ink"}" transform="translate(${n(x)} ${n(y)})" d="${GLYPHS[name]}"/>`;
@@ -164,6 +168,49 @@ const label = (x, y, l) => {
 
 const arrow = (points) =>
   `<path class="edge" d="M${points.map(([x, y]) => `${n(x)} ${n(y)}`).join("L")}"/>`;
+
+// A box with a glyph and title on top and a bulleted list under them, for "any
+// of these" sets.
+const ITEM = 25;
+const listBox = ({ x, y, w, h, icon, title, items, kind = "box" }) => {
+  const height = 58 + SIZE.title * 1.35 + 10 + items.length * ITEM;
+  const top = y + (h - height) / 2;
+  const left = x + 34;
+  return (
+    rect(kind, x, y, w, h, 14) +
+    glyph(icon, x + w / 2, top + 24, kind === "key") +
+    text("title", x + w / 2, top + 58 + SIZE.title, title, "middle") +
+    items
+      .map((s, i) => {
+        const yy = top + 58 + SIZE.title * 1.35 + 10 + i * ITEM + 16;
+        return (
+          `<circle class="badge" cx="${n(left - 12)}" cy="${n(yy - 4.5)}" r="3"/>` +
+          text("sub", left, yy, s)
+        );
+      })
+      .join("")
+  );
+};
+
+// A small heading over a column of boxes, naming whose side it is.
+const columnHead = (b, s) =>
+  text("axis-strong", b.x + b.w / 2, b.y - 14, s, "middle");
+
+// An arrow back from `from` to `to` that runs under both boxes, labeled at the
+// bottom: the answer that comes back once the trip there is done.
+const under = (from, to, s, drop = 34) => {
+  const y = Math.max(from.y + from.h, to.y + to.h) + drop;
+  const x1 = from.x + from.w / 2,
+    x2 = to.x + to.w / 2;
+  return (
+    arrow([
+      [x1, from.y + from.h],
+      [x1, y],
+      [x2, y],
+      [x2, to.y + to.h],
+    ]) + label((x1 + x2) / 2, y, s)
+  );
+};
 
 // --- layout ---------------------------------------------------------------------------
 // A grid of equal columns: cell(col, row) is a box's position, spanning `span` columns
@@ -278,14 +325,7 @@ const lanes = ({ top, rows, ticks, left = 200, h = 46, gap = 14 }) => {
 };
 
 // --- diagrams ------------------------------------------------------------------------
-// Each returns { h, body, alt }. The three parties recur, so they're defined once.
-const you = {
-  icon: "keyboard",
-  text: [
-    "Your mute controls",
-    "a key, your menu or status bar, a panel, the browser",
-  ],
-};
+// Each returns { h, body, alt }. The parties that recur are defined once.
 const headset = {
   icon: "headset",
   kind: "key",
@@ -297,93 +337,120 @@ const headset = {
 const callApp = { icon: "call", text: ["Zoom or Meet", "web or desktop"] };
 
 const diagrams = {
+  // Two lanes, because Virtual Headset carries two separate things: your voice,
+  // and your mute. The return arrow is what makes the second lane worth having.
   "how-it-works"() {
     const h = headline(
-      "Your call app thinks you plugged in a headset",
-      "so its mute and yours are the same button, and your voice goes through it",
+      "Zoom and Meet only obey a headset's mute button. Virtual Headset gives your mic one",
+      "your call app sees an ordinary USB headset: a microphone with your voice, and a mute button it listens to",
     );
-    const cell = grid({ cols: 3, gapX: 150, rowH: 150, gapY: 24, top: h.top });
+    const cell = grid({
+      cols: 3,
+      gapX: 130,
+      rowH: 128,
+      gapY: 26,
+      top: h.top + 30,
+    });
     const mic = {
       ...cell(0, 0),
       icon: "mic",
       text: ["Your mic", "built-in, USB or Bluetooth"],
     };
-    const controls = { ...cell(0, 1), ...you };
-    const vh = { ...cell(1, 0, { rows: 2 }), ...headset };
+    const key = {
+      ...cell(0, 1),
+      icon: "keyboard",
+      text: ["Your mute key", "or menu bar, panel, browser"],
+    };
+    const vMic = {
+      ...cell(1, 0),
+      icon: "headset",
+      kind: "key",
+      text: ["Its microphone", "your voice, noise removed if you like"],
+    };
+    const vButton = {
+      ...cell(1, 1),
+      icon: "button",
+      kind: "key",
+      text: ["Its mute button", "pressed for you"],
+    };
+    const hears = {
+      ...cell(2, 0),
+      icon: "call",
+      text: ["Hears you", "as from any headset"],
+    };
+    const mutes = {
+      ...cell(2, 1),
+      icon: "muted",
+      text: ["Mutes", "as if you'd clicked its own button"],
+    };
+    const back = under(
+      mutes,
+      key,
+      "and tells your menu bar and panel you're muted",
+    );
+    return {
+      h: mutes.y + mutes.h + 34 + 30,
+      body:
+        h.body +
+        columnHead(mic, "YOU") +
+        columnHead(vMic, "VIRTUAL HEADSET") +
+        columnHead(hears, "ZOOM OR MEET") +
+        [mic, key, vMic, vButton, hears, mutes].map(box).join("") +
+        link(mic, vMic, { label: "your voice" }) +
+        link(vMic, hears, { label: "your voice" }) +
+        link(key, vButton, { label: "press" }) +
+        link(vButton, mutes, { label: "press" }) +
+        back,
+      alt: "Zoom and Meet only obey a headset's mute button, and Virtual Headset gives your mic one: your call app sees an ordinary USB headset. Your voice goes from your mic (built-in, USB or Bluetooth) into Virtual Headset's microphone, with noise removed if you like, and Zoom or Meet hears you as from any headset. Your mute key (or menu bar, panel or browser) presses Virtual Headset's mute button, and Zoom or Meet mutes as if you'd clicked its own button, then tells your menu bar and panel you're muted",
+    };
+  },
+
+  // A hub: whatever you press, the call app decides, and everything shows its answer.
+  "mute-anywhere"() {
+    const h = headline(
+      "Mute from anywhere, and everything agrees",
+      "every mute goes to your call app, which decides, and every indicator shows what it decided",
+    );
+    const cell = grid({ cols: 3, gapX: 130, rowH: 236, top: h.top });
+    const from = {
+      ...cell(0),
+      icon: "keyboard",
+      title: "Press mute anywhere",
+      items: [
+        "a key",
+        "your menu or status bar",
+        "the panel",
+        "the Firefox toolbar",
+        "Zoom or Meet's own button",
+      ],
+    };
     const call = {
-      ...cell(2, 0, { rows: 2 }),
-      ...callApp,
-      text: [
+      ...cell(1),
+      icon: "call",
+      kind: "key",
+      text: ["Zoom or Meet mutes", "the one place mute is decided"],
+    };
+    const to = {
+      ...cell(2),
+      icon: "muted",
+      title: "It shows everywhere",
+      items: [
+        "your menu or status bar",
+        "the panel",
+        "the Firefox toolbar",
         "Zoom or Meet",
-        "sees a headset, and keeps its own mute button in sync with yours",
       ],
     };
     return {
       h: call.y + call.h + 24,
       body:
         h.body +
-        [mic, controls, vh, call].map(box).join("") +
-        link(mic, vh, { label: "your voice", y: mic.y + mic.h / 2 }) +
-        link(vh, call, { label: "your voice", y: mic.y + mic.h / 2 }) +
-        link(controls, vh, {
-          both: true,
-          label: ["press mute", "show mute"],
-          y: controls.y + controls.h / 2,
-        }) +
-        link(vh, call, {
-          both: true,
-          label: ["mute button", "mute light"],
-          y: controls.y + controls.h / 2,
-        }),
-      alt: "Your call app thinks you plugged in a headset, so its mute and yours are the same button. Your mic (built-in, USB or Bluetooth) sends your voice to Virtual Headset, a headset made in software, which passes it on to Zoom or Meet. Your mute controls (a key, your menu or status bar, a panel, the browser) press its mute button, which Zoom or Meet obeys; the call app answers with the headset's mute light, which your controls show",
-    };
-  },
-
-  "mute-loop"() {
-    const h = headline(
-      "Mute from anywhere, and everything agrees",
-      "a mute is one loop through the call app, so no indicator can fall out of step",
-    );
-    const cell = grid({ cols: 3, gapX: 170, rowH: 170, top: h.top });
-    const controls = { ...cell(0), ...you };
-    const vh = {
-      ...cell(1),
-      ...headset,
-      text: ["Virtual Headset", "its mute button and light"],
-    };
-    const call = {
-      ...cell(2),
-      ...callApp,
-      text: ["Zoom or Meet", "mutes itself, as for a real headset"],
-    };
-    const noteY = call.y + call.h + 34;
-    return {
-      h: noteY + 20,
-      body:
-        h.body +
-        [controls, vh, call].map(box).join("") +
-        link(controls, vh, {
-          both: true,
-          label: [
-            ["1", "you press mute"],
-            ["4", "shows muted"],
-          ],
-        }) +
-        link(vh, call, {
-          both: true,
-          label: [
-            ["2", "button press"],
-            ["3", "mute light"],
-          ],
-        }) +
-        text(
-          "sub",
-          W / 2,
-          noteY,
-          "Mute inside Zoom or Meet instead, and it starts at 3: the call app lights the mute light, and your controls follow.",
-          "middle",
-        ),
-      alt: "Mute from anywhere, and everything agrees. 1: you press mute with a key, your menu or status bar, a panel or the browser. 2: Virtual Headset presses its mute button, and Zoom or Meet mutes itself as for a real headset. 3: the call app lights the headset's mute light. 4: your controls show muted. Mute inside Zoom or Meet instead, and it starts at 3",
+        listBox(from) +
+        box(call) +
+        listBox(to) +
+        link(from, call, { label: "mute" }) +
+        link(call, to, { label: "muted" }),
+      alt: "Mute from anywhere, and everything agrees. Press mute anywhere (a key, your menu or status bar, the panel, the Firefox toolbar, or Zoom or Meet's own button), and Zoom or Meet mutes: it's the one place mute is decided. It then shows everywhere: your menu or status bar, the panel, the Firefox toolbar, and Zoom or Meet",
     };
   },
 

@@ -44,7 +44,7 @@ updates all of them too.
 <!-- diagram:how-it-works -->
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/how-it-works-dark.svg">
-  <img src="docs/diagrams/how-it-works.svg" alt="Your call app thinks you plugged in a headset, so its mute and yours are the same button. Your mic (built-in, USB or Bluetooth) sends your voice to Virtual Headset, a headset made in software, which passes it on to Zoom or Meet. Your mute controls (a key, your menu or status bar, a panel, the browser) press its mute button, which Zoom or Meet obeys; the call app answers with the headset's mute light, which your controls show">
+  <img src="docs/diagrams/how-it-works.svg" alt="Zoom and Meet only obey a headset's mute button, and Virtual Headset gives your mic one: your call app sees an ordinary USB headset. Your voice goes from your mic (built-in, USB or Bluetooth) into Virtual Headset's microphone, with noise removed if you like, and Zoom or Meet hears you as from any headset. Your mute key (or menu bar, panel or browser) presses Virtual Headset's mute button, and Zoom or Meet mutes as if you'd clicked its own button, then tells your menu bar and panel you're muted">
 </picture>
 <!-- /diagram:how-it-works -->
 
@@ -102,12 +102,12 @@ toggle-mute` on macOS. Bind it to a key.
 | **The browser** | the [Firefox extension](docs/browser-extension.md)                       | Chrome's own headset support                                         |
 | **Scripts**     | `virtual-headset-ctl` or [D-Bus](docs/usage.md#d-bus)                    | `virtual-headset` and [its state files](docs/macos.md#your-menu-bar) |
 
-<!-- diagram:mute-loop -->
+<!-- diagram:mute-anywhere -->
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/mute-loop-dark.svg">
-  <img src="docs/diagrams/mute-loop.svg" alt="Mute from anywhere, and everything agrees. 1: you press mute with a key, your menu or status bar, a panel or the browser. 2: Virtual Headset presses its mute button, and Zoom or Meet mutes itself as for a real headset. 3: the call app lights the headset's mute light. 4: your controls show muted. Mute inside Zoom or Meet instead, and it starts at 3">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/mute-anywhere-dark.svg">
+  <img src="docs/diagrams/mute-anywhere.svg" alt="Mute from anywhere, and everything agrees. Press mute anywhere (a key, your menu or status bar, the panel, the Firefox toolbar, or Zoom or Meet's own button), and Zoom or Meet mutes: it's the one place mute is decided. It then shows everywhere: your menu or status bar, the panel, the Firefox toolbar, and Zoom or Meet">
 </picture>
-<!-- /diagram:mute-loop -->
+<!-- /diagram:mute-anywhere -->
 
 ## Stereo while you're muted, on macOS
 
