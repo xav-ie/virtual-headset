@@ -6,7 +6,7 @@
   stdenv,
   swift,
 }:
-# virtual-headset — the macOS agent (see main.swift). Ships as a .app
+# virtual-headset — the macOS agent (main.swift is the entry point). Ships as a .app
 # with a stable bundle id so a Microphone TCC grant can pin this bundle's cdhash;
 # ffmpeg runs as its child, so the grant covers it. Needs virtual-headset-driver
 # installed for its Virtual_Headset_Microphone output.
@@ -30,7 +30,7 @@ stdenv.mkDerivation {
     let DFN_LADSPA = "${deepfilternet}/lib/ladspa/libdeep_filter_ladspa.dylib"
     let FFMPEG = "${ffmpeg-full.bin}/bin/ffmpeg"
     EOF
-    swiftc -O -import-objc-header ladspa.h main.swift Paths.swift -o virtual-headset
+    swiftc -O -import-objc-header ladspa.h *.swift -o virtual-headset
     runHook postBuild
   '';
   installPhase = ''

@@ -61,9 +61,24 @@ speaks the native-messaging protocol on stdio and relays to D-Bus.
 
 ## The macOS app
 
-One Swift file, built with Nix: `nix build .#virtual-headset`. The build re-signs
-the app with Apple's `codesign`, so Nix's sandbox must be `relaxed` or off, and
-running it needs the [boot argument](macos.md#why-the-boot-argument).
+Swift in `packages/virtual-headset-macos`, built with Nix: `nix build
+.#virtual-headset`. The build re-signs the app with Apple's `codesign`, so Nix's
+sandbox must be `relaxed` or off, and running it needs the [boot
+argument](macos.md#why-the-boot-argument).
+
+| File                                                                      |                                                                              |
+| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `main.swift`                                                              | the entry point: CLI subcommands, then the agent                             |
+| `Common.swift`                                                            | notification names, device names, the denoiser models                        |
+| `CoreAudio.swift`                                                         | device lookups and who's recording from what                                 |
+| `Headset.swift`                                                           | the Virtual_Headset HID device                                               |
+| `Capture.swift`, `DeepFilter.swift`, `BlackHoleOut.swift`, `Engine.swift` | the audio path: mic capture, DeepFilterNet, output into the driver, the gate |
+| `Controller.swift`                                                        | the agent's state and pipeline: settings, call state, start/stop             |
+| `Controller+Panel.swift`                                                  | the settings panel                                                           |
+| `Controller+Recorder.swift`                                               | the panel's Test recorder                                                    |
+| `Backdrop.swift`, `Keyboard.swift`                                        | the panel's backdrop, and its keyboard navigation and focus ring             |
+| `Bridge.swift`                                                            | `virtual-headset bridge`, the Firefox native-messaging host                  |
+| `Screenshots.swift`                                                       | `virtual-headset screenshot`, for the docs                                   |
 
 ## Docs, diagrams and screenshots
 
