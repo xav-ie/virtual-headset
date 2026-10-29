@@ -12,6 +12,9 @@
     nuenv.inputs.nixpkgs.follows = "nixpkgs";
     home-manager.url = "github:nix-community/home-manager/release-26.05";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
+    # Only for checks.<darwin>.darwin-module.
+    nix-darwin.url = "github:nix-darwin/nix-darwin/nix-darwin-26.05";
+    nix-darwin.inputs.nixpkgs.follows = "nixpkgs";
     ags.url = "github:aylur/ags";
     ags.inputs.nixpkgs.follows = "nixpkgs";
   };
@@ -181,7 +184,11 @@
           # Linux-only: vitest needs `localhost`, which the darwin sandbox can't resolve.
           // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux (
             import ./tests/js-tests.nix { inherit pkgs; }
-          );
+          )
+          // lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin {
+            # nix-darwin module wiring. Definition lives in ./tests/darwin.
+            darwin-module = import ./tests/darwin/module.nix { inherit inputs system; };
+          };
         };
 
       flake = {

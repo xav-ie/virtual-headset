@@ -47,3 +47,26 @@ jobs:
       # Builds all packages, runs the NixOS VM tests + TypeScript unit tests,
       # and checks formatting and the generated docs.
       - run: nix flake check --no-write-lock-file
+
+  # The macOS half: builds the app, the driver and the Firefox package, builds a
+  # minimal nix-darwin system with the module enabled, and checks formatting and
+  # the generated docs, all for aarch64-darwin.
+  check-macos:
+    runs-on: macos-15
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write # the Nix installer's FlakeHub login
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
+        with:
+          # The app's build re-signs it with Apple's /usr/bin/codesign
+          # (__noChroot), which a strict sandbox refuses.
+          extra-conf: sandbox = relaxed
+      - uses: DeterminateSystems/magic-nix-cache-action@84c0677f58dcedf3b91f8223ce36a9ea5b3c84b7 # v15
+
+      - run: nix flake check --no-write-lock-file
