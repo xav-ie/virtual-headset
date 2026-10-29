@@ -34,15 +34,17 @@ nix fmt              # format everything
 
 `just check` runs everything for your platform. To run one suite:
 
-| Where                                  | What                                                        | Run                                             |
-| -------------------------------------- | ----------------------------------------------------------- | ----------------------------------------------- |
-| `extension/test/`                      | site adapters (jsdom) and the reconciler                    | `cd extension && npm test`                      |
-| `packages/virtual-headset-panel/test/` | the panel's logic                                           | `cd packages/virtual-headset-panel && npm test` |
-| `tests/nixos/`                         | VM tests: module wiring, runtime behaviour, Firefox install | `nix build .#checks.x86_64-linux.runtime`       |
-| `tests/bridge_smoke.py`                | the Firefox bridge against a running daemon                 | `python3 tests/bridge_smoke.py`                 |
-| `tests/webhid-tester/`                 | a WebHID page for poking the headset in Chromium            | `cd tests/webhid-tester && npm run dev`         |
+| Where                                  | What                                                         | Run                                               |
+| -------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------- |
+| `extension/test/`                      | site adapters (jsdom) and the reconciler                     | `cd extension && npm test`                        |
+| `packages/virtual-headset-panel/test/` | the panel's logic                                            | `cd packages/virtual-headset-panel && npm test`   |
+| `tests/nixos/`                         | VM tests: module wiring, runtime behaviour, Firefox install  | `nix build .#checks.x86_64-linux.runtime`         |
+| `tests/darwin/`                        | a minimal nix-darwin system with the module and Firefox host | `nix build .#checks.aarch64-darwin.darwin-module` |
+| `tests/bridge_smoke.py`                | the Firefox bridge against a running daemon                  | `python3 tests/bridge_smoke.py`                   |
+| `tests/webhid-tester/`                 | a WebHID page for poking the headset in Chromium             | `cd tests/webhid-tester && npm run dev`           |
 
-The VM tests and the TypeScript tests run on Linux only.
+The VM tests and the TypeScript tests run on Linux only; the nix-darwin check,
+on macOS only.
 
 ## The Firefox extension
 
@@ -138,9 +140,10 @@ Releases are cut by [knope](https://knope.tech) and signed in CI.
    the changelog, `virtual_headset.xpi` and `updates.json`. Installed copies
    update from that `updates.json`.
 
-`nix flake check` and the Lint workflow (actionlint, shellcheck, zizmor) gate
-every pull request; Security runs CodeQL and dependency review while the
-repository is public.
+`nix flake check`, on Linux and on macOS (which builds the app, the driver and a
+nix-darwin system with the module), and the Lint workflow (actionlint,
+shellcheck, zizmor) gate every pull request; Security runs CodeQL, including the
+macOS app's Swift, and dependency review while the repository is public.
 
 <details>
 <summary><b>One-time setup</b></summary>
