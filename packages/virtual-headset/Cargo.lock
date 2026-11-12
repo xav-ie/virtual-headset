@@ -869,6 +869,7 @@ dependencies = [
  "crossbeam-channel",
  "crossterm",
  "ctrlc",
+ "futures-util",
  "serde",
  "serde_json",
  "uhid-virt",
