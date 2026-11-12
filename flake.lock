@@ -42,6 +42,21 @@
         "type": "github"
       }
     },
+    "bar-panels": {
+      "locked": {
+        "lastModified": 1794463960,
+        "narHash": "sha256-qbuQwt3X6sHifblUTK4vykkT3UZbZnuLYkJOLjGo1ao=",
+        "owner": "xav-ie",
+        "repo": "bar-panels",
+        "rev": "eb1a90004cabe7d9e4197b80e286bdefe2115085",
+        "type": "github"
+      },
+      "original": {
+        "owner": "xav-ie",
+        "repo": "bar-panels",
+        "type": "github"
+      }
+    },
     "crane": {
       "locked": {
         "lastModified": 1762538466,
@@ -172,6 +187,7 @@
     "root": {
       "inputs": {
         "ags": "ags",
+        "bar-panels": "bar-panels",
         "crane": "crane",
         "flake-parts": "flake-parts",
         "home-manager": "home-manager",

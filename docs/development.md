@@ -76,9 +76,8 @@ argument](macos.md#why-the-boot-argument).
 | `Headset.swift`                                                           | the Virtual_Headset HID device                                               |
 | `Capture.swift`, `DeepFilter.swift`, `BlackHoleOut.swift`, `Engine.swift` | the audio path: mic capture, DeepFilterNet, output into the driver, the gate |
 | `Controller.swift`                                                        | the agent's state and pipeline: settings, call state, start/stop             |
-| `Controller+Panel.swift`                                                  | the settings panel                                                           |
+| `Controller+Panel.swift`                                                  | the settings panel's rows, on BarPanels (its glass, animation and keyboard)  |
 | `Controller+Recorder.swift`                                               | the panel's Test recorder                                                    |
-| `Backdrop.swift`, `Keyboard.swift`                                        | the panel's backdrop, and its keyboard navigation and focus ring             |
 | `Bridge.swift`                                                            | `virtual-headset bridge`, the Firefox native-messaging host                  |
 | `Screenshots.swift`                                                       | `virtual-headset screenshot`, for the docs                                   |
 

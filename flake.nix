@@ -17,6 +17,8 @@
     nix-darwin.inputs.nixpkgs.follows = "nixpkgs";
     ags.url = "github:aylur/ags";
     ags.inputs.nixpkgs.follows = "nixpkgs";
+    # The macOS panel's look and behaviour, shared with screenshare-ui.
+    bar-panels.url = "github:xav-ie/bar-panels";
   };
 
   nixConfig = {
@@ -54,6 +56,7 @@
               inherit pkgs craneLib;
               nuenv = inputs.nuenv.lib;
               agsPackages = inputs.ags.packages.${system};
+              bar-panels = pkgs.callPackage "${inputs.bar-panels}/default.nix" { };
             })
             // {
               default = config.packages.virtual-headset;
@@ -162,6 +165,7 @@
                   inherit pkgs craneLib;
                   nuenv = inputs.nuenv.lib;
                   agsPackages = inputs.ags.packages.${system};
+                  bar-panels = pkgs.callPackage "${inputs.bar-panels}/default.nix" { };
                 }
               );
             };

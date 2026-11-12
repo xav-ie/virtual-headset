@@ -1,58 +1,43 @@
 import AppKit
+import BarPanels
 
 extension Controller {
-  func testRow() -> NSView {
-    func button(_ title: String, _ symbol: String, _ action: Selector, enabled: Bool) -> NSButton {
-      let b = NSButton(
-        title: title, image: NSImage(systemSymbolName: symbol, accessibilityDescription: nil)!,
-        target: self, action: action)
-      b.controlSize = .small
-      b.bezelStyle = .rounded
-      b.imagePosition = .imageLeading
-      b.isEnabled = enabled
-      return focusable("test-\(title)", b)
-    }
+  // Record 8 s of raw mic, then play it as-is or through the current settings;
+  // a playhead to scrub while a take plays.
+  func testRows() -> [NSView] {
     let haveTakes = !recording && FileManager.default.fileExists(atPath: takes["raw"]!)
-    // Record 8 s of raw mic, then play it as-is or through the current settings.
-    let recordButton = button("Record", "record.circle", #selector(record), enabled: true)
-    self.recordButton = recordButton
+    let record = HoverRow(
+      "Record a Test",
+      icon: NSImage(
+        systemSymbolName: recording ? "stop.circle" : "record.circle", accessibilityDescription: nil),
+      detail: "8 s")
+    record.onClick = { [weak self] in self?.record() }
+    recordRow = record
     updateRecordButton()
-    let buttons = NSStackView(views: [
-      recordButton,
-      button(
-        "Original", playing == "raw" ? "stop.fill" : "play.fill", #selector(playRaw),
-        enabled: haveTakes),
-      button(
-        "Denoised", playing == "out" ? "stop.fill" : "play.fill", #selector(playOut),
-        enabled: haveTakes),
-    ])
-    buttons.spacing = 4
-    guard playing != nil else { return buttons }
-    // Scrubbable playhead while a take plays.
-    focusable("playhead", playhead)
-    playhead.controlSize = .small
+    var rows: [NSView] = [record]
+    for (key, title) in [("raw", "Play Original"), ("out", "Play Denoised")] {
+      let row = HoverRow(
+        title,
+        icon: NSImage(
+          systemSymbolName: playing == key ? "stop.fill" : "play.fill", accessibilityDescription: nil),
+        enabled: haveTakes)
+      if haveTakes { row.onClick = { [weak self] in self?.toggle(key) } }
+      rows.append(row)
+    }
+    guard playing != nil else { return rows }
     playhead.target = self
     playhead.action = #selector(seek(_:))
-    _ = valueLabel("", playTime)
     updatePlayhead()
-    let col = NSStackView(views: [buttons, NSStackView(views: [playhead, playTime])])
-    col.orientation = .vertical
-    col.alignment = .leading
-    return col
+    return rows + [field("Playhead", playhead, valueLabel(playTime.stringValue, playTime))]
   }
   // "8 s", "7 s", … while a take records: whole seconds left, rounded up.
+  // Pressing the row again meanwhile ends the take early.
   func updateRecordButton() {
-    guard let recordButton else { return }
-    guard recording, let end = recordingEnds else {
-      recordButton.title = "Record"
-      recordButton.image = NSImage(systemSymbolName: "record.circle", accessibilityDescription: nil)
-      return
-    }
-    // A stop button while recording: pressing it again ends the take early.
+    guard let recordRow else { return }
+    guard recording, let end = recordingEnds else { return recordRow.setDetail("8 s") }
     let left = Int(max(0, end.timeIntervalSinceNow).rounded(.up))
-    recordButton.title = "\(max(left, 1)) s"
-    recordButton.image = NSImage(systemSymbolName: "stop.fill", accessibilityDescription: nil)
-    recordButton.setAccessibilityLabel("Stop recording, \(left) seconds left")
+    recordRow.setDetail("\(max(left, 1)) s")
+    recordRow.setAccessibilityLabel("Stop recording, \(left) seconds left")
   }
 
   func updatePlayhead() {
@@ -65,7 +50,7 @@ extension Controller {
   // Records from the live capture, or, while the mic is closed (between calls, or
   // muted), opens the mic just for the take.
   // Records 8 s; pressed again while recording, it stops and keeps the take so far.
-  @objc func record() {
+  func record() {
     if recording {
       takeSource?.finishTake()
       return
@@ -122,8 +107,6 @@ extension Controller {
     try? data.write(to: URL(fileURLWithPath: den))
     render(den, takes["out"]!, filters: nil)
   }
-  @objc func playRaw() { toggle("raw") }
-  @objc func playOut() { toggle("out") }
   // Clicking the playing take stops it; the other take switches over.
   func toggle(_ key: String) {
     let wasPlaying = playing

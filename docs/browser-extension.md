@@ -40,7 +40,7 @@ The extension works on Linux and macOS and keeps mute in sync both ways:
 **On macOS** the meeting tab becomes your call. While it's open, the menu bar
 and the panel show whether you're live or muted, your mic is released while
 you're muted (so Bluetooth headsets play stereo), and your mute key, the panel's
-Mute button and the toolbar all press the tab's mic button. If a call app is
+Mute Call switch and the toolbar all press the tab's mic button. If a call app is
 also connected to the headset, the headset's call comes first.
 
 ## Using it

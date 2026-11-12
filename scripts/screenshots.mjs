@@ -41,7 +41,7 @@ execFileSync(bin, ["screenshot", asset("panel")], { stdio: "inherit" });
 // point, so the call window keeps its size, runs off the bottom edge, and sits
 // under the panel (which covers its second tile).
 const W = 900,
-  H = 330;
+  H = 400;
 // The mic glyph, as the bar item draws it: red while live.
 const mic = (color) =>
   `<svg viewBox="0 0 24 24" width="16" height="16"><rect x="8" y="2" width="8" height="13" rx="4" fill="${color}"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round"/></svg>`;
@@ -82,7 +82,7 @@ const hero = `<!doctype html>
   .controls { position: absolute; left: 0; right: 0; bottom: 22px; display: flex; justify-content: center; gap: 12px; }
   .controls span { width: 46px; height: 46px; border-radius: 50%; background: #3c4043; display: grid; place-items: center; }
   .controls span.end { width: 68px; border-radius: 23px; background: #ea4335; }
-  .panel { position: absolute; top: 34px; right: 62px; width: 340px; filter: drop-shadow(0 14px 30px rgba(0,0,0,.55)); }
+  .panel { position: absolute; top: 34px; right: 62px; width: 280px; filter: drop-shadow(0 14px 30px rgba(0,0,0,.55)); }
 </style></head><body><div class="desktop">
   <div class="menubar"><b>Chrome</b><span>File</span><span>Edit</span><span>View</span>
     <div class="right">${glyph(18)}<span class="mic">${mic(c.live)}</span>${glyph(16)}${glyph(22)}<span>Tue 10:02</span></div>
