@@ -10,8 +10,9 @@ uhid-virt = "0.0.8"
 # child. SIGKILL still can't be caught — kill_existing_loopbacks covers that.
 ctrlc = { version = "3.4", features = ["termination"] }
 crossterm = "0.29"
-zbus = "5.19"
+zbus = "6.1"
 crossbeam-channel = "0.5"
+futures-util = { version = "0.3", default-features = false }
 atty = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

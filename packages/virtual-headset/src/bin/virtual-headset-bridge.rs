@@ -38,8 +38,9 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
+use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
-use zbus::blocking::Connection;
+use zbus::Connection;
 
 /// Client-side proxy for the daemon's mute interface (see
 /// `src/dbus_interface.rs` for the service side).
@@ -120,11 +121,13 @@ fn main() {
             );
             // Keep running so the extension's port stays open; method calls
             // below will surface their own errors.
-            Connection::session().unwrap_or_else(|_| std::process::exit(1))
+            zbus::block_on(Connection::session()).unwrap_or_else(|_| std::process::exit(1))
         }
     };
 
-    let proxy = match VirtualHeadsetProxyBlocking::new(&conn) {
+    // zbus is async only; this bridge is a plain loop over stdin, so each call
+    // runs to completion in `block_on` (which also drives the connection).
+    let proxy = match zbus::block_on(VirtualHeadsetProxy::new(&conn)) {
         Ok(p) => p,
         Err(e) => {
             send(
@@ -138,12 +141,13 @@ fn main() {
     };
 
     // Push the initial state so the extension can reconcile on connect.
-    if let Ok(muted) = proxy.is_muted() {
+    if let Ok(muted) = zbus::block_on(proxy.is_muted()) {
         send(&out, &OutMessage::State { muted });
     }
 
-    // Forward MuteChanged signals from the daemon to the extension. Uses its
-    // own connection because the blocking signal iterator borrows it.
+    // Forward MuteChanged signals from the daemon to the extension, on a
+    // thread and connection of their own: that thread stays in `block_on`
+    // while it waits for them.
     {
         let out = out.clone();
         thread::spawn(move || signal_loop(out));
@@ -162,7 +166,13 @@ fn main() {
         match serde_json::from_slice::<InMessage>(&msg) {
             Ok(InMessage::Call { .. }) => {}
             Ok(InMessage::SetMute { muted }) => {
-                let res = if muted { proxy.mute() } else { proxy.unmute() };
+                let res = zbus::block_on(async {
+                    if muted {
+                        proxy.mute().await
+                    } else {
+                        proxy.unmute().await
+                    }
+                });
                 if let Err(e) = res {
                     send(
                         &out,
@@ -173,7 +183,7 @@ fn main() {
                 }
             }
             Ok(InMessage::Toggle) => {
-                if let Err(e) = proxy.toggle() {
+                if let Err(e) = zbus::block_on(proxy.toggle()) {
                     send(
                         &out,
                         &OutMessage::Error {
@@ -183,7 +193,7 @@ fn main() {
                 }
             }
             Ok(InMessage::Query) => {
-                if let Ok(muted) = proxy.is_muted() {
+                if let Ok(muted) = zbus::block_on(proxy.is_muted()) {
                     send(&out, &OutMessage::State { muted });
                 }
             }
@@ -224,27 +234,18 @@ fn signal_loop(out: Out) {
             Some(conn) => conn,
             None => return,
         };
-        let proxy = match VirtualHeadsetProxyBlocking::new(&conn) {
-            Ok(p) => p,
-            Err(_) => {
-                thread::sleep(Duration::from_secs(2));
-                continue;
+        let relayed = zbus::block_on(async {
+            let proxy = VirtualHeadsetProxy::new(&conn).await?;
+            let mut signals = proxy.receive_mute_changed().await?;
+            while let Some(signal) = signals.next().await {
+                if let Ok(args) = signal.args() {
+                    send(&out, &OutMessage::State { muted: args.muted });
+                }
             }
-        };
-        let signals = match proxy.receive_mute_changed() {
-            Ok(s) => s,
-            Err(_) => {
-                thread::sleep(Duration::from_secs(2));
-                continue;
-            }
-        };
-        for signal in signals {
-            if let Ok(args) = signal.args() {
-                send(&out, &OutMessage::State { muted: args.muted });
-            }
-        }
-        // Iterator ended (connection dropped): loop and reconnect.
-        thread::sleep(Duration::from_secs(1));
+            zbus::Result::Ok(())
+        });
+        // The stream ended (connection dropped) or never started: reconnect.
+        thread::sleep(Duration::from_secs(if relayed.is_ok() { 1 } else { 2 }));
     }
 }
 
@@ -284,7 +285,7 @@ fn send_sources(out: &Out) {
 fn connect_with_retry(max_attempts: usize) -> Option<Connection> {
     let mut attempt = 0usize;
     loop {
-        match Connection::session() {
+        match zbus::block_on(Connection::session()) {
             Ok(conn) => return Some(conn),
             Err(_) => {
                 attempt += 1;

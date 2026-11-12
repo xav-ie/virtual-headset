@@ -1,7 +1,7 @@
 use crossbeam_channel::Sender;
 use serde::Serialize;
 use std::sync::{Arc, Mutex};
-use zbus::{blocking::Connection, interface, object_server::SignalEmitter};
+use zbus::{Connection, connection, interface, object_server::SignalEmitter};
 
 /// A request from D-Bus for the daemon's main loop, which owns the device and
 /// the audio graph and is the only place state changes.
@@ -117,6 +117,8 @@ pub struct DBusService {
     state: SharedState,
 }
 
+const OBJECT_PATH: &str = "/com/github/virtual_headset";
+
 impl DBusService {
     /// Initialize D-Bus service on session bus
     pub fn new(
@@ -124,26 +126,49 @@ impl DBusService {
         commands: Sender<Command>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let state = SharedState::new(state);
-        let connection = Connection::session()?;
-
         let interface = VirtualHeadset {
             state: state.clone(),
             commands,
         };
-        connection
-            .object_server()
-            .at("/com/github/virtual_headset", interface)?;
 
-        connection.request_name("com.github.virtual_headset")?;
+        // zbus runs a connection on the runtime of the thread that built it,
+        // and only while that thread is inside `block_on`. So the connection
+        // gets a thread of its own that stays there, serving method calls for
+        // the daemon's life; signals are sent through it from other threads.
+        let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+        std::thread::Builder::new()
+            .name("dbus".into())
+            .spawn(move || {
+                zbus::block_on(async move {
+                    let built = async {
+                        connection::Builder::session()
+                            .serve_at(OBJECT_PATH, interface)
+                            .name("com.github.virtual_headset")
+                            .build()
+                            .await
+                    }
+                    .await;
+                    let serving = built.is_ok();
+                    let _ = ready_tx.send(built);
+                    if serving {
+                        std::future::pending::<()>().await;
+                    }
+                })
+            })?;
+        let connection = ready_rx.recv()??;
 
         Ok(Self { connection, state })
     }
 
     fn signal_emitter(&self) -> zbus::Result<SignalEmitter<'static>> {
-        let object_server = self.connection.object_server();
-        let iface_ref =
-            object_server.interface::<_, VirtualHeadset>("/com/github/virtual_headset")?;
-        Ok(iface_ref.signal_emitter().to_owned())
+        zbus::block_on(async {
+            let iface_ref = self
+                .connection
+                .object_server()
+                .interface::<_, VirtualHeadset>(OBJECT_PATH)
+                .await?;
+            Ok(iface_ref.signal_emitter().to_owned())
+        })
     }
 
     /// Store the new state and announce it: `MuteChanged` (for status bars that
