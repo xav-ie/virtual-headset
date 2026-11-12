@@ -1,4 +1,5 @@
 {
+  bar-panels,
   deepfilternet,
   fetchFromGitHub,
   lib,
@@ -30,7 +31,8 @@ stdenv.mkDerivation {
     let DFN_LADSPA = "${deepfilternet}/lib/ladspa/libdeep_filter_ladspa.dylib"
     let FFMPEG = "${ffmpeg-full.bin}/bin/ffmpeg"
     EOF
-    swiftc -O -import-objc-header ladspa.h *.swift -o virtual-headset
+    swiftc -O -I ${bar-panels}/lib -L ${bar-panels}/lib -lBarPanels \
+      -import-objc-header ladspa.h *.swift -o virtual-headset
     runHook postBuild
   '';
   installPhase = ''

@@ -4,6 +4,8 @@
   craneLib,
   # inputs.ags.packages.<system>; needed by the AGS panel (linux-only).
   agsPackages,
+  # The BarPanels Swift library (macOS-only).
+  bar-panels,
 }:
 let
   writeNuApplication = nuenv.mkNushellScriptApplication pkgs.nushell pkgs.writeTextFile pkgs.lib;
@@ -17,7 +19,7 @@ in
 # Virtual_Headset_Microphone loopback driver.
 if pkgs.stdenv.hostPlatform.isDarwin then
   {
-    virtual-headset = pkgs.callPackage ./virtual-headset-macos { };
+    virtual-headset = pkgs.callPackage ./virtual-headset-macos { inherit bar-panels; };
     virtual-headset-driver = pkgs.callPackage ./virtual-headset-driver { };
     virtual-headset-firefox = pkgs.callPackage ./virtual-headset-firefox { };
   }

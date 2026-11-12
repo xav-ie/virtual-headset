@@ -11,7 +11,7 @@ Linux and macOS.** Your call app sees a real USB telephony headset, so a key, yo
 status bar, or your browser toolbar mutes the call, and muting inside the call
 updates all of them too.
 
-![A Zoom web call in Chrome on a Mac, with Virtual Headset's panel open under its red mic in the menu bar: Live, a Mute button, the input level, and noise suppression](assets/screenshot.png)
+![A Zoom web call in Chrome on a Mac, with Virtual Headset's panel open under its red mic in the menu bar: Live, a Mute Call switch, the input level, and noise suppression](assets/screenshot.png)
 
 - **Mute that the call app respects.** Zoom and Meet treat Virtual Headset's
   button like a headset's: they mute themselves and light its mute light back,

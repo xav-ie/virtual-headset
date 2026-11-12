@@ -64,13 +64,13 @@ or Meet in Firefox, add [the extension](browser-extension.md).
 `virtual-headset panel` opens the settings panel; bind it to a key or a
 [menu bar item](#your-menu-bar). In a call it leads with the call's mic:
 
-|                                                                                                                Live                                                                                                                 |                                                                                              Muted                                                                                              |                                                                     Between calls                                                                     |
-| :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------------------------------------------------: |
-| <img src="../assets/panel/live.png" width="260" alt="The panel in a call, live: a red mic and Live with a Mute button, the input set to Default with its level meter, Using AirPods Pro, and noise suppression on at Max strength"> | <img src="../assets/panel/muted.png" width="260" alt="The panel in a call, muted: a grey crossed-out mic and Muted with an Unmute button, and the status Mic released while the call is muted"> | <img src="../assets/panel/no-call.png" width="260" alt="The panel between calls: Not in a call, the input set to Default, and noise suppression off"> |
+|                                                                                                                   Live                                                                                                                    |                                                                                                Muted                                                                                                |                                                                    Between calls                                                                    |
+| :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------------------------------------------------------: |
+| <img src="../assets/panel/live.png" width="260" alt="The panel in a call, live: Live, a red mic with the Mute Call switch off, the Default mic ticked with its level meter, Using AirPods Pro, and noise suppression on at Max strength"> | <img src="../assets/panel/muted.png" width="260" alt="The panel in a call, muted: Muted, a grey crossed-out mic with the Mute Call switch on, and the status Mic released while the call is muted"> | <img src="../assets/panel/no-call.png" width="260" alt="The panel between calls: Not in a call, the Default mic ticked, and noise suppression off"> |
 
 - **Live / Muted** is the call's own mute state, read from the headset's mute
-  light, and the button presses the headset's mute button.
-- **Input** is the mic to forward. **Default** follows macOS's input, so
+  light, and the **Mute Call** switch presses the headset's mute button.
+- **Microphone** picks the mic to forward. **Default** follows macOS's input, so
   plugging in a headset just works; the line under it says which mic is in use.
 - **Level** shows while the mic is open. Your mic opens only while an app
   records from Virtual_Headset_Microphone, so between calls it, and macOS's
@@ -93,11 +93,11 @@ Turned off, your mic goes through untouched.
 
 ## Advanced
 
-<img align="right" src="../assets/panel/advanced.png" width="260" alt="The panel with Advanced open: Keep the mic open between calls, unticked, with its note, then Model set to DeepFilterNet 3 and Gate off">
+<img align="right" src="../assets/panel/advanced.png" width="260" alt="The panel with Advanced open: Keep Mic Open Between Calls switched off, with its note, then the models with DeepFilterNet 3 ticked, and Gate off">
 
 Settings almost nobody should change, at the bottom of the panel:
 
-- **Keep the mic open between calls.** Calls start a moment sooner, but your mic
+- **Keep Mic Open Between Calls.** Calls start a moment sooner, but your mic
   stays in use, and a Bluetooth headset stays in call audio, even while nothing
   is listening. Off by default.
 - **Model** picks the noise suppression engine: DeepFilterNet 3, or one of five
@@ -116,17 +116,17 @@ scored worse in our speech-quality benchmarks, which is why they're here.
 The panel takes the keyboard while it's open, whether or not macOS's Keyboard
 navigation setting is on:
 
-| Key                  |                           |
-| -------------------- | ------------------------- |
-| Tab, Shift-Tab, ↑, ↓ | move between controls     |
-| Space, Return        | press the focused control |
-| ←, →                 | adjust the focused slider |
-| Escape, ⌘W           | close the panel           |
+| Key                  |                                                      |
+| -------------------- | ---------------------------------------------------- |
+| Tab, Shift-Tab, ↑, ↓ | move between rows and sliders                        |
+| Space, Return        | press the focused row                                |
+| ←, →                 | open or close Advanced, or adjust the focused slider |
+| Escape, ⌘W           | close the panel                                      |
 
-A ring marks the focused control once you use the keyboard, and goes away when
-you click. VoiceOver reads each control by its row's name ("Input",
-"Strength"), the mute button as "Mute the call" or "Unmute the call", and
-whether Advanced is open.
+Once you use the keyboard the focused row is highlighted, or a ring marks the
+focused slider; moving the pointer hands the panel back to it. VoiceOver reads
+each row by its name, a switch row with whether it's on, a slider by its label
+("Strength", "Gate"), and whether Advanced is open.
 
 <br clear="right">
 

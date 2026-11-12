@@ -62,12 +62,23 @@ jobs:
         with:
           languages: swift
           build-mode: manual
+      # The panel library the app imports, at the revision flake.lock pins, built
+      # as a module with the same compiler and target as the app.
       # CodeQL's extractor can't read the PCH Xcode's compiler would make of the
       # bridging header (a newer format), so the header is parsed directly.
       - name: Build the macOS app's sources
         run: |
+          swiftc="$(xcrun --find swiftc)"
+          flags=(-target x86_64-apple-macos14 -sdk "$(xcrun --show-sdk-path)")
+          bp="$RUNNER_TEMP/bar-panels"
+          git clone --quiet https://github.com/xav-ie/bar-panels "$bp"
+          git -C "$bp" checkout --quiet "$(jq -r '.nodes["bar-panels"].locked.rev' flake.lock)"
+          "$swiftc" "${flags[@]}" -parse-as-library -module-name BarPanels \
+            -emit-library -static -o "$RUNNER_TEMP/libBarPanels.a" \
+            -emit-module -emit-module-path "$RUNNER_TEMP/BarPanels.swiftmodule" \
+            "$bp"/Sources/BarPanels/*.swift
           printf 'let DFN_LADSPA = ""\nlet FFMPEG = ""\n' > "$RUNNER_TEMP/Paths.swift"
-          "$(xcrun --find swiftc)" -target x86_64-apple-macos14 -sdk "$(xcrun --show-sdk-path)" \
+          "$swiftc" "${flags[@]}" -I "$RUNNER_TEMP" -L "$RUNNER_TEMP" -lBarPanels \
             -import-objc-header packages/virtual-headset-macos/ladspa.h -disable-bridging-pch \
             packages/virtual-headset-macos/*.swift "$RUNNER_TEMP/Paths.swift" \
             -o "$RUNNER_TEMP/virtual-headset"

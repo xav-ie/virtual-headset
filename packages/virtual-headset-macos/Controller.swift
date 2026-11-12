@@ -1,8 +1,9 @@
 import AVFoundation
 import AppKit
+import BarPanels
 import CoreAudio
 
-final class Controller: NSObject, NSSoundDelegate {
+final class Controller: BarPanel, NSSoundDelegate {
   let defaults: UserDefaults
   // A screenshot controller only draws the panel: no devices, audio or listeners.
   let live: Bool
@@ -54,7 +55,6 @@ final class Controller: NSObject, NSSoundDelegate {
   var call: String { hidCall != "none" ? hidCall : browserCall }
   var callMuted: Bool { call == "muted" }
   var showAdvanced = false
-  var scrim: Scrim?
   var capture: Capture?
   var bhOut: BlackHoleOut?
   // Loaded once (~260 ms) and kept across captures, so an unmute doesn't wait
@@ -73,10 +73,10 @@ final class Controller: NSObject, NSSoundDelegate {
   // When the take in progress ends; the Record button counts down to it.
   var recordingEnds: Date?
   var takeSource: Capture?
-  weak var recordButton: NSButton?
+  weak var recordRow: HoverRow?
   var sound: NSSound?
   var playing: String?  // key into `takes`
-  let playhead = NSSlider(value: 0, minValue: 0, maxValue: 1, target: nil, action: nil)
+  let playhead = accentSlider(value: 0, min: 0, max: 1, target: nil, action: nil)
   let playTime = NSTextField(labelWithString: "")
   let gateText = NSTextField(labelWithString: "")
   let takes = [
@@ -86,23 +86,16 @@ final class Controller: NSObject, NSSoundDelegate {
     "out": NSTemporaryDirectory() + "virtual-headset-out.wav",
   ]
 
-  let panel = PopupPanel(
-    contentRect: NSRect(x: 0, y: 0, width: Controller.width, height: 40),
-    styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-  // Keyboard navigation, independent of macOS's setting (see FocusRing): the panel's
-  // controls in reading order, rebuilt with it; focus is kept by id across rebuilds.
-  var focusables: [(id: String, view: NSView)] = []
-  var focusID: String?
-  var keyboardActive = false
-  let ring = FocusRing(frame: .zero)
-  var clickMonitor: Any?
-  var lastMonitorClose: Date?
+  override func buildContent() {
+    let content = panelContent()
+    show(content.items, inset: content.inset)
+  }
 
   init(live: Bool = true) {
     self.live = live
     // Screenshots keep their settings in a throwaway domain, never the user's.
     defaults = live ? .standard : UserDefaults(suiteName: "com.github.virtual-headset.screenshot")!
-    super.init()
+    super.init(toggle: TOGGLE)
     // Settings saved under the agent's previous bundle id carry over once.
     if live, defaults.object(forKey: "migrated") == nil,
       let old = UserDefaults(suiteName: "com.x.mic-denoise")
@@ -112,17 +105,10 @@ final class Controller: NSObject, NSSoundDelegate {
       }
       defaults.set(true, forKey: "migrated")
     }
-    panel.level = .popUpMenu
-    panel.isFloatingPanel = true
-    panel.hidesOnDeactivate = false
-    panel.backgroundColor = .clear
-    panel.isOpaque = false
     panel.setAccessibilityLabel("Virtual Headset")
-    panel.onKey = { [weak self] e in self?.key(e) ?? false }
-    panel.onClick = { [weak self] in
-      self?.keyboardActive = false
-      self?.ring.isHidden = true
-    }
+    // Screenshots capture the panel by its window, which a capture-hidden one
+    // doesn't have.
+    if !live { panel.sharingType = .readOnly }
     guard live else { return }
     if denoise, model == "dfn" {
       let limit = Float(mix * 100)
@@ -132,12 +118,6 @@ final class Controller: NSObject, NSSoundDelegate {
       }
     }
 
-    DistributedNotificationCenter.default().addObserver(forName: TOGGLE, object: nil, queue: .main)
-    {
-      [weak self] note in
-      let x = (note.object as? String).flatMap(Double.init).map { CGFloat($0) }
-      self?.togglePanel(anchorX: x)
-    }
     DistributedNotificationCenter.default().addObserver(forName: MUTE, object: nil, queue: .main) {
       [weak self] note in
       self?.mute(note.object as? String)
