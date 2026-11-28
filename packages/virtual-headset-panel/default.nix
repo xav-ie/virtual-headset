@@ -10,6 +10,7 @@
   wrapGAppsHook3,
   gobject-introspection,
   gjs,
+  ags-bundle,
   agsPackages,
   virtual-headset-ctl,
 }:
@@ -20,7 +21,7 @@ stdenv.mkDerivation {
   nativeBuildInputs = [
     wrapGAppsHook3
     gobject-introspection
-    agsPackages.default
+    ags-bundle
   ];
 
   # On GI_TYPELIB_PATH at runtime via the gobject-introspection setup hook.
@@ -38,7 +39,7 @@ stdenv.mkDerivation {
   installPhase = ''
     runHook preInstall
     mkdir -p $out/bin
-    ags bundle app.ts $out/bin/virtual-headset-panel
+    ags-bundle app.ts $out/bin/virtual-headset-panel
     install -Dm644 icon.svg $out/share/icons/hicolor/scalable/apps/virtual-headset-panel.svg
     runHook postInstall
   '';

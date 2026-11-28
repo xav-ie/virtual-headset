@@ -21,6 +21,29 @@
         "type": "github"
       }
     },
+    "ags-bundle": {
+      "inputs": {
+        "ags": [
+          "ags"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1795826393,
+        "narHash": "sha256-d+/t16IjGV4W4PTF9d16882EipyZlmf6Oy89VqxlxiQ=",
+        "owner": "xav-ie",
+        "repo": "ags-bundle",
+        "rev": "8fde5f43d6c295075c49e8943b1f5556821a44de",
+        "type": "github"
+      },
+      "original": {
+        "owner": "xav-ie",
+        "repo": "ags-bundle",
+        "type": "github"
+      }
+    },
     "astal": {
       "inputs": {
         "nixpkgs": [
@@ -187,6 +210,7 @@
     "root": {
       "inputs": {
         "ags": "ags",
+        "ags-bundle": "ags-bundle",
         "bar-panels": "bar-panels",
         "crane": "crane",
         "flake-parts": "flake-parts",

@@ -15,6 +15,9 @@
     # Only for checks.<darwin>.darwin-module.
     nix-darwin.url = "github:nix-darwin/nix-darwin/nix-darwin-26.05";
     nix-darwin.inputs.nixpkgs.follows = "nixpkgs";
+    ags-bundle.url = "github:xav-ie/ags-bundle";
+    ags-bundle.inputs.ags.follows = "ags";
+    ags-bundle.inputs.nixpkgs.follows = "nixpkgs";
     ags.url = "github:aylur/ags";
     ags.inputs.nixpkgs.follows = "nixpkgs";
     # The macOS panel's look and behaviour, shared with screenshare-ui.
@@ -56,6 +59,7 @@
               inherit pkgs craneLib;
               nuenv = inputs.nuenv.lib;
               agsPackages = inputs.ags.packages.${system};
+              ags-bundle = inputs.ags-bundle.packages.${system}.default;
               bar-panels = pkgs.callPackage "${inputs.bar-panels}/default.nix" { };
             })
             // {
@@ -165,6 +169,7 @@
                   inherit pkgs craneLib;
                   nuenv = inputs.nuenv.lib;
                   agsPackages = inputs.ags.packages.${system};
+                  ags-bundle = inputs.ags-bundle.packages.${system}.default;
                   bar-panels = pkgs.callPackage "${inputs.bar-panels}/default.nix" { };
                 }
               );
